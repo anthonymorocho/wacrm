@@ -60,13 +60,14 @@ function SignupPageInner() {
 
     setLoading(true);
 
-    // If we have an invite token, point Supabase's verification
-    // email back at the join page so the user can accept after
-    // verifying. Without a token, Supabase uses its default
-    // redirect (the app root).
+    // Always provide the redirect explicitly. Without this, Supabase falls
+    // back to the project's configured Site URL, which is commonly still
+    // `http://localhost:3000` on projects created from the local template.
+    // `window.location.origin` keeps local, staging, and production signups
+    // on the host where the user actually registered.
     const emailRedirectTo = inviteToken
       ? `${window.location.origin}/join/${encodeURIComponent(inviteToken)}`
-      : undefined;
+      : window.location.origin;
 
     const { error } = await supabase.auth.signUp({
       email,
@@ -75,7 +76,7 @@ function SignupPageInner() {
         data: {
           full_name: fullName,
         },
-        ...(emailRedirectTo ? { emailRedirectTo } : {}),
+        emailRedirectTo,
       },
     });
 

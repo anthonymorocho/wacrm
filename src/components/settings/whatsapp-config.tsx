@@ -868,6 +868,12 @@ export function WhatsAppConfig() {
                         strong: (chunks) => <strong className="text-foreground">{chunks}</strong>,
                       })}
                     </li>
+                    <li>
+                      {t.rich('step3_5', {
+                        strong: (chunks) => <strong className="text-foreground">{chunks}</strong>,
+                      })}
+                    </li>
+                    <li>{t('step3_6')}</li>
                   </ol>
                 </AccordionContent>
               </AccordionItem>

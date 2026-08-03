@@ -4,6 +4,7 @@ import { Suspense, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { isExistingEmailSignup } from "@/lib/auth/signup-result";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -69,7 +70,7 @@ function SignupPageInner() {
       ? `${window.location.origin}/join/${encodeURIComponent(inviteToken)}`
       : window.location.origin;
 
-    const { error } = await supabase.auth.signUp({
+    const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: {
@@ -82,6 +83,17 @@ function SignupPageInner() {
 
     if (error) {
       setError(error.message);
+      setLoading(false);
+      return;
+    }
+
+    // Supabase may intentionally return no error for an existing email to
+    // prevent account enumeration. In that case `identities` is empty and
+    // no new verification email is sent.
+    if (isExistingEmailSignup(data.user)) {
+      setError(
+        "This email is already registered. Sign in or use the password reset option."
+      );
       setLoading(false);
       return;
     }

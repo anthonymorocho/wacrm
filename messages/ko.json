@@ -510,6 +510,13 @@
       "won": "성사",
       "lost": "실패"
     },
+    "conversation": {
+      "conversation": "대화",
+      "replyFromPipeline": "파이프라인에서 답장하기",
+      "loading": "대화 로딩 중",
+      "noConversation": "연결된 대화 없음",
+      "noConversationHint": "이 딜에는 아직 답장할 WhatsApp 대화가 연결되지 않았습니다."
+    },
     "form": {
       "editDeal": "딜 수정",
       "newDeal": "새 딜",

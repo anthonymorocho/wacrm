@@ -7,6 +7,7 @@ import { PipelineBoard } from "@/components/pipelines/pipeline-board";
 import { PipelineSettings } from "@/components/pipelines/pipeline-settings";
 import { DealForm } from "@/components/pipelines/deal-form";
 import { PipelineAnalytics } from "@/components/pipelines/pipeline-analytics";
+import { DealConversationSheet } from "@/components/pipelines/deal-conversation-sheet";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -63,6 +64,7 @@ export default function PipelinesPage() {
   // the per-column "+" trigger the same Sheet.
   const [dealFormOpen, setDealFormOpen] = useState(false);
   const [editingDeal, setEditingDeal] = useState<Deal | null>(null);
+  const [conversationDeal, setConversationDeal] = useState<Deal | null>(null);
   const [defaultStageId, setDefaultStageId] = useState<string>("");
 
   // Guard against double-seeding (React StrictMode double-effect in dev).
@@ -268,6 +270,10 @@ export default function PipelinesPage() {
     setDealFormOpen(true);
   }, []);
 
+  const handleOpenConversation = useCallback((deal: Deal) => {
+    setConversationDeal(deal);
+  }, []);
+
   async function handleCreatePipeline() {
     const name = newPipelineName.trim();
     if (!name) return;
@@ -440,6 +446,7 @@ export default function PipelinesPage() {
             onDealMoved={handleDealMoved}
             onAddDeal={handleAddDeal}
             onEditDeal={handleEditDeal}
+            onOpenConversation={handleOpenConversation}
           />
         </>
       )}
@@ -509,6 +516,17 @@ export default function PipelinesPage() {
         stages={stages}
         defaultStageId={defaultStageId}
         onSaved={refreshDeals}
+      />
+
+      <DealConversationSheet
+        deal={conversationDeal}
+        stageName={
+          stages.find((stage) => stage.id === conversationDeal?.stage_id)?.name
+        }
+        open={conversationDeal !== null}
+        onOpenChange={(open) => {
+          if (!open) setConversationDeal(null);
+        }}
       />
     </div>
   );

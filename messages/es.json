@@ -57,6 +57,15 @@
     "label": "Idioma",
     "current": "Idioma actual: {language}"
   },
+  "Pipelines": {
+    "conversation": {
+      "conversation": "Conversación",
+      "replyFromPipeline": "Responder desde el embudo",
+      "loading": "Cargando conversación",
+      "noConversation": "No hay una conversación vinculada",
+      "noConversationHint": "Este negocio todavía no tiene una conversación de WhatsApp para responder."
+    }
+  },
   "Dashboard": {
     "page": {
       "title": "Panel",

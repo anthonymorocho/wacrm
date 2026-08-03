@@ -510,6 +510,13 @@
       "won": "Won",
       "lost": "Lost"
     },
+    "conversation": {
+      "conversation": "Conversation",
+      "replyFromPipeline": "Reply from the pipeline",
+      "loading": "Loading conversation",
+      "noConversation": "No conversation linked",
+      "noConversationHint": "This deal does not have a WhatsApp conversation to reply to yet."
+    },
     "form": {
       "editDeal": "Edit Deal",
       "newDeal": "New Deal",

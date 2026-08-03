@@ -371,6 +371,10 @@ export interface Deal {
   notes?: string;
   expected_close_date?: string;
   status?: DealStatus;
+  /** Updated whenever a customer sends an inbound message. */
+  last_activity_at?: string;
+  /** True for cards created automatically from inbound messages. */
+  auto_created_from_message?: boolean;
   created_at: string;
   updated_at?: string;
   contact?: Contact;

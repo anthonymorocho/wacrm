@@ -10,6 +10,10 @@ import { dispatchInboundToFlows } from '@/lib/flows/engine'
 import { dispatchInboundToAiReply } from '@/lib/ai/auto-reply'
 import { dispatchWebhookEvent } from '@/lib/webhooks/deliver'
 import {
+  createSupabaseInboundDealRepository,
+  ensureInboundDeal,
+} from '@/lib/pipelines/inbound-deal'
+import {
   handleTemplateWebhookChange,
   isTemplateWebhookField,
 } from '@/lib/whatsapp/template-webhook'
@@ -700,6 +704,25 @@ async function processMessage(
 
   if (convError) {
     console.error('Error updating conversation:', convError)
+  }
+
+  // Create one open card for the conversation, or refresh the existing
+  // card's activity timestamp. A failed pipeline write must not drop the
+  // WhatsApp message that was already persisted above.
+  try {
+    await ensureInboundDeal(
+      createSupabaseInboundDealRepository(supabaseAdmin()),
+      {
+        accountId,
+        userId: configOwnerUserId,
+        contactId: contactRecord.id,
+        conversationId: conversation.id,
+        contactLabel: contactRecord.name || contactRecord.phone,
+        activityAt: new Date(parseInt(message.timestamp) * 1000).toISOString(),
+      },
+    )
+  } catch (dealError) {
+    console.error('[webhook] inbound pipeline deal failed:', dealError)
   }
 
   // If this contact was a recent broadcast recipient, flag the reply

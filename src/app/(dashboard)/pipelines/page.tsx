@@ -30,20 +30,15 @@ import { useCan } from "@/hooks/use-can";
 import { useAuth } from "@/hooks/use-auth";
 import { GatedButton } from "@/components/ui/gated-button";
 import { useTranslations } from "next-intl";
+import {
+  DEFAULT_PIPELINE_NAME,
+  DEFAULT_PIPELINE_STAGES,
+} from "@/lib/pipelines/defaults";
 
 // Pipeline creation is admin-class (settings-tier write under
 // the new RLS); deal creation is operational and only requires
 // agent+. The two CTAs gate on different `useCan` capabilities,
 // not on different copy.
-
-// Spec-defined seed — name and color per the product spec.
-const SPEC_DEFAULT_STAGES = [
-  { name: "New Lead", color: "#3b82f6", position: 0 }, // blue
-  { name: "Qualified", color: "#eab308", position: 1 }, // yellow
-  { name: "Proposal Sent", color: "#f97316", position: 2 }, // orange
-  { name: "Negotiation", color: "#8b5cf6", position: 3 }, // purple
-  { name: "Won", color: "#22c55e", position: 4 }, // green
-];
 
 export default function PipelinesPage() {
   const t = useTranslations("Pipelines.page");
@@ -103,7 +98,7 @@ export default function PipelinesPage() {
         .from("deals")
         .select("*, contact:contacts(*), assignee:profiles!deals_assigned_to_fkey(*)")
         .eq("pipeline_id", pipelineId)
-        .order("created_at", { ascending: false });
+        .order("last_activity_at", { ascending: false, nullsFirst: false });
       return (data ?? []) as Deal[];
     },
     [supabase],
@@ -120,7 +115,7 @@ export default function PipelinesPage() {
 
     const { data: pipeline, error } = await supabase
       .from("pipelines")
-      .insert({ user_id: user.id, account_id: accountId, name: "Sales Pipeline" })
+      .insert({ user_id: user.id, account_id: accountId, name: DEFAULT_PIPELINE_NAME })
       .select()
       .single();
 
@@ -129,7 +124,7 @@ export default function PipelinesPage() {
       return null;
     }
 
-    const stagesPayload = SPEC_DEFAULT_STAGES.map((s) => ({
+    const stagesPayload = DEFAULT_PIPELINE_STAGES.map((s) => ({
       pipeline_id: pipeline.id,
       name: s.name,
       color: s.color,
@@ -214,6 +209,32 @@ export default function PipelinesPage() {
     setDeals(await loadDeals(selectedPipelineId));
   }, [loadDeals, selectedPipelineId]);
 
+  // Inbound messages create or touch deals in the webhook. Realtime keeps
+  // an already-open board synchronized without a manual page refresh.
+  useEffect(() => {
+    if (!selectedPipelineId) return;
+
+    const channel = supabase
+      .channel(`pipeline-deals:${selectedPipelineId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "deals",
+          filter: `pipeline_id=eq.${selectedPipelineId}`,
+        },
+        () => {
+          void refreshDeals();
+        },
+      )
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [refreshDeals, selectedPipelineId, supabase]);
+
   const handleDealMoved = useCallback(
     async (dealId: string, newStageId: string) => {
       // Optimistic update — board already animated; just persist.
@@ -279,7 +300,7 @@ export default function PipelinesPage() {
       return;
     }
 
-    const stagesPayload = SPEC_DEFAULT_STAGES.map((s) => ({
+    const stagesPayload = DEFAULT_PIPELINE_STAGES.map((s) => ({
       pipeline_id: pipeline.id,
       name: s.name,
       color: s.color,

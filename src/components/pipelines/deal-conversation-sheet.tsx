@@ -134,16 +134,15 @@ export function DealConversationSheet({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
         side="right"
-        className="w-full gap-0 border-border bg-popover p-0 sm:max-w-xl"
+        className="w-full gap-0 overflow-hidden border-border bg-popover p-0 sm:!max-w-[42rem]"
       >
-        <SheetHeader className="shrink-0 border-b border-border/60 bg-card px-5 py-4 pr-14">
+        <SheetHeader className="shrink-0 border-b border-border/60 bg-background px-5 py-3 pr-14">
           <SheetTitle className="flex items-center gap-2 truncate text-popover-foreground">
             <MessageSquare className="h-4 w-4 shrink-0 text-primary" />
-            <span className="truncate">{headerLabel}</span>
+            <span className="truncate">{t("replyFromPipeline")}</span>
           </SheetTitle>
           <SheetDescription className="truncate text-xs text-muted-foreground">
-            {stageName ? `${stageName} · ` : ""}
-            {contact?.phone ?? t("replyFromPipeline")}
+            {stageName ?? headerLabel}
           </SheetDescription>
         </SheetHeader>
 

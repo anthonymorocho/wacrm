@@ -271,7 +271,10 @@ export interface WhatsAppConfig {
   user_id: string;
   phone_number_id: string;
   waba_id?: string;
-  access_token: string;
+  /** Not returned to the browser; server routes decrypt it when needed. */
+  access_token?: string;
+  /** Encrypted Meta App Secret used to verify inbound webhook signatures. */
+  app_secret?: string;
   verify_token?: string;
   status: 'connected' | 'disconnected';
   connected_at?: string;

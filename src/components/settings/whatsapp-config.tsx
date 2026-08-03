@@ -32,6 +32,7 @@ import {
 import type { WhatsAppConfig as WhatsAppConfigType } from '@/types';
 
 const MASKED_TOKEN = '••••••••••••••••';
+const MASKED_APP_SECRET = '••••••••••••••••';
 
 type ConnectionStatus = 'connected' | 'disconnected' | 'unknown';
 type ResetReason = 'token_corrupted' | 'meta_api_error' | null;
@@ -51,6 +52,7 @@ export function WhatsAppConfig() {
   const [testing, setTesting] = useState(false);
   const [resetting, setResetting] = useState(false);
   const [showToken, setShowToken] = useState(false);
+  const [showAppSecret, setShowAppSecret] = useState(false);
   const [config, setConfig] = useState<WhatsAppConfigType | null>(null);
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('unknown');
   const [resetReason, setResetReason] = useState<ResetReason>(null);
@@ -66,6 +68,9 @@ export function WhatsAppConfig() {
   const [phoneNumberId, setPhoneNumberId] = useState('');
   const [wabaId, setWabaId] = useState('');
   const [accessToken, setAccessToken] = useState('');
+  const [appSecret, setAppSecret] = useState('');
+  const [appSecretEdited, setAppSecretEdited] = useState(false);
+  const [appSecretConfigured, setAppSecretConfigured] = useState(false);
   const [verifyToken, setVerifyToken] = useState('');
   const [pin, setPin] = useState('');
   const [tokenEdited, setTokenEdited] = useState(false);
@@ -105,7 +110,7 @@ export function WhatsAppConfig() {
       // remains accurate.
       const { data, error } = await supabase
         .from('whatsapp_config')
-        .select('*')
+        .select('id, user_id, phone_number_id, waba_id, status, connected_at, registered_at, subscribed_apps_at, last_registration_error')
         .eq('account_id', acctId)
         .maybeSingle();
 
@@ -118,6 +123,9 @@ export function WhatsAppConfig() {
         setPhoneNumberId(data.phone_number_id || '');
         setWabaId(data.waba_id || '');
         setAccessToken(MASKED_TOKEN);
+        setAppSecret('');
+        setAppSecretEdited(false);
+        setAppSecretConfigured(false);
         setVerifyToken('');
         setPin('');
         setTokenEdited(false);
@@ -126,6 +134,9 @@ export function WhatsAppConfig() {
         setPhoneNumberId('');
         setWabaId('');
         setAccessToken('');
+        setAppSecret('');
+        setAppSecretEdited(false);
+        setAppSecretConfigured(false);
         setVerifyToken('');
         setPin('');
         setTokenEdited(false);
@@ -138,6 +149,8 @@ export function WhatsAppConfig() {
         try {
           const res = await fetch('/api/whatsapp/config', { method: 'GET' });
           const payload = await res.json();
+          setAppSecretConfigured(Boolean(payload.app_secret_configured));
+          if (payload.app_secret_configured) setAppSecret(MASKED_APP_SECRET);
 
           if (payload.connected) {
             setConnectionStatus('connected');
@@ -191,6 +204,13 @@ export function WhatsAppConfig() {
       toast.error('Access Token is required for initial setup');
       return;
     }
+    if (
+      (!config || !appSecretConfigured) &&
+      (!appSecretEdited || !appSecret.trim() || appSecret === MASKED_APP_SECRET)
+    ) {
+      toast.error('Meta App Secret is required for initial setup');
+      return;
+    }
 
     try {
       setSaving(true);
@@ -208,6 +228,10 @@ export function WhatsAppConfig() {
         // simple token rotation, leaving it blank skips re-register.
         pin: pin.trim() || null,
       };
+
+      if (appSecretEdited && appSecret !== MASKED_APP_SECRET && appSecret.trim()) {
+        payload.app_secret = appSecret.trim();
+      }
 
       if (tokenEdited && accessToken !== MASKED_TOKEN && accessToken.trim()) {
         payload.access_token = accessToken.trim();
@@ -498,15 +522,13 @@ export function WhatsAppConfig() {
             </div>
             <AlertDescription className="text-muted-foreground mt-2 text-xs leading-relaxed">
               {isRegistered ? (
-                <span
-                  dangerouslySetInnerHTML={{
-                    __html: t('subscribedSince', {
-                      date: config.registered_at
-                        ? new Date(config.registered_at).toLocaleString()
-                        : t('unknownDate'),
-                    }),
-                  }}
-                />
+                <span>
+                  {t('subscribedSince', {
+                    date: config.registered_at
+                      ? new Date(config.registered_at).toLocaleString()
+                      : t('unknownDate'),
+                  })}
+                </span>
               ) : lastRegistrationError ? (
                 <>
                   {t('lastAttemptFailed')}
@@ -618,6 +640,43 @@ export function WhatsAppConfig() {
             </div>
 
             <div className="space-y-2">
+              <Label className="text-muted-foreground">{t('appSecret')}</Label>
+              <div className="relative">
+                <Input
+                  type={showAppSecret ? 'text' : 'password'}
+                  placeholder={t('appSecretPlaceholder')}
+                  value={appSecret}
+                  onChange={(e) => {
+                    setAppSecret(e.target.value);
+                    setAppSecretEdited(true);
+                  }}
+                  onFocus={() => {
+                    if (appSecret === MASKED_APP_SECRET) {
+                      setAppSecret('');
+                      setAppSecretEdited(true);
+                    }
+                  }}
+                  className="bg-muted border-border text-foreground placeholder:text-muted-foreground pr-10"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowAppSecret(!showAppSecret)}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  {showAppSecret ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                </button>
+              </div>
+              {appSecretConfigured && !appSecretEdited && (
+                <p className="text-xs text-muted-foreground">
+                  {t('appSecretHidden')}
+                </p>
+              )}
+              <p className="text-xs text-muted-foreground">
+                {t('appSecretHint')}
+              </p>
+            </div>
+
+            <div className="space-y-2">
               <Label className="text-muted-foreground">{t('webhookVerifyToken')}</Label>
               <Input
                 placeholder={t('webhookVerifyTokenPlaceholder')}
@@ -647,7 +706,7 @@ export function WhatsAppConfig() {
                 className="bg-muted border-border text-foreground placeholder:text-muted-foreground tracking-widest"
               />
               <p className="text-xs text-muted-foreground leading-relaxed">
-                <span dangerouslySetInnerHTML={{ __html: t('pinHint') }} />
+                {t('pinHint')}
               </p>
             </div>
           </CardContent>
@@ -760,7 +819,7 @@ export function WhatsAppConfig() {
                 </AccordionTrigger>
                 <AccordionContent className="text-muted-foreground">
                   <ol className="list-decimal list-inside space-y-1 text-sm">
-                    <li dangerouslySetInnerHTML={{ __html: t('step1_1') }} />
+                    <li>{t('step1_1')}</li>
                     <li>{t('step1_2')}</li>
                     <li>{t('step1_3')}</li>
                     <li>{t('step1_4')}</li>
@@ -794,9 +853,21 @@ export function WhatsAppConfig() {
                 <AccordionContent className="text-muted-foreground">
                   <ol className="list-decimal list-inside space-y-1 text-sm">
                     <li>{t('step3_1')}</li>
-                    <li dangerouslySetInnerHTML={{ __html: t('step3_2') }} />
-                    <li dangerouslySetInnerHTML={{ __html: t('step3_3') }} />
-                    <li dangerouslySetInnerHTML={{ __html: t('step3_4') }} />
+                    <li>
+                      {t.rich('step3_2', {
+                        strong: (chunks) => <strong className="text-foreground">{chunks}</strong>,
+                      })}
+                    </li>
+                    <li>
+                      {t.rich('step3_3', {
+                        strong: (chunks) => <strong className="text-foreground">{chunks}</strong>,
+                      })}
+                    </li>
+                    <li>
+                      {t.rich('step3_4', {
+                        strong: (chunks) => <strong className="text-foreground">{chunks}</strong>,
+                      })}
+                    </li>
                   </ol>
                 </AccordionContent>
               </AccordionItem>
@@ -812,8 +883,16 @@ export function WhatsAppConfig() {
                   <ol className="list-decimal list-inside space-y-1 text-sm">
                     <li>{t('step4_1')}</li>
                     <li>{t('step4_2')}</li>
-                    <li dangerouslySetInnerHTML={{ __html: t('step4_3') }} />
-                    <li dangerouslySetInnerHTML={{ __html: t('step4_4') }} />
+                    <li>
+                      {t.rich('step4_3', {
+                        strong: (chunks) => <strong className="text-foreground">{chunks}</strong>,
+                      })}
+                    </li>
+                    <li>
+                      {t.rich('step4_4', {
+                        strong: (chunks) => <strong className="text-foreground">{chunks}</strong>,
+                      })}
+                    </li>
                     <li>{t('step4_5')}</li>
                   </ol>
                 </AccordionContent>

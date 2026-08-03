@@ -179,7 +179,35 @@ export async function POST(request: Request) {
   const rawBody = await request.text()
   const signature = request.headers.get('x-hub-signature-256')
 
-  if (!verifyMetaWebhookSignature(rawBody, signature)) {
+  // Each account may use its own Meta app. Resolve all configured app
+  // secrets server-side and accept the signature if one of them matches.
+  // The encrypted values never leave this route.
+  const { data: configs, error: configError } = await supabaseAdmin()
+    .from('whatsapp_config')
+    .select('app_secret')
+
+  if (configError) {
+    console.error('[webhook] failed to load Meta App Secrets:', configError)
+    return NextResponse.json({ error: 'Unable to verify webhook' }, { status: 500 })
+  }
+
+  const secrets = new Set<string>()
+  for (const config of configs ?? []) {
+    if (!config.app_secret) continue
+    try {
+      secrets.add(decrypt(config.app_secret))
+    } catch {
+      console.warn('[webhook] skipping an unreadable Meta App Secret')
+    }
+  }
+  // Backward compatibility for rows created before per-account secrets.
+  if (process.env.META_APP_SECRET) secrets.add(process.env.META_APP_SECRET)
+
+  const validSignature = [...secrets].some((secret) =>
+    verifyMetaWebhookSignature(rawBody, signature, secret),
+  )
+
+  if (!validSignature) {
     // 401 (not 200) — we want Meta's delivery dashboard to show failures
     // loudly if a misconfiguration causes signatures to stop matching,
     // rather than silently eating events.

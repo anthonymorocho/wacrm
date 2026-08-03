@@ -87,7 +87,7 @@ export async function GET() {
 
     const { data: config, error: configError } = await supabase
       .from('whatsapp_config')
-      .select('phone_number_id, access_token, status')
+      .select('phone_number_id, access_token, status, app_secret')
       .eq('account_id', accountId)
       .maybeSingle()
 
@@ -122,6 +122,7 @@ export async function GET() {
           connected: false,
           reason: 'token_corrupted',
           needs_reset: true,
+          app_secret_configured: Boolean(config.app_secret),
           message:
             'The stored access token cannot be decrypted with the current ENCRYPTION_KEY. This usually means the key changed, or it differs between environments (local vs Hostinger vs Vercel). Click "Reset Configuration" below, then re-save.',
         },
@@ -135,7 +136,11 @@ export async function GET() {
         phoneNumberId: config.phone_number_id,
         accessToken,
       })
-      return NextResponse.json({ connected: true, phone_info: phoneInfo })
+      return NextResponse.json({
+        connected: true,
+        phone_info: phoneInfo,
+        app_secret_configured: Boolean(config.app_secret),
+      })
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unknown Meta API error'
       console.error('[whatsapp/config GET] Meta API verification failed:', message)
@@ -143,6 +148,7 @@ export async function GET() {
         {
           connected: false,
           reason: 'meta_api_error',
+          app_secret_configured: Boolean(config.app_secret),
           message: `Meta API rejected the credentials: ${message}`,
         },
         { status: 200 }
@@ -185,12 +191,36 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json()
-    const { phone_number_id, waba_id, access_token, verify_token, pin } = body
+    const {
+      phone_number_id,
+      waba_id,
+      access_token,
+      app_secret,
+      verify_token,
+      pin,
+    } = body
+
+    // Load the existing row before validation so legacy configurations can
+    // keep using META_APP_SECRET until the account owner enters its secret.
+    const { data: existing } = await supabase
+      .from('whatsapp_config')
+      .select('id, registered_at, phone_number_id, app_secret')
+      .eq('account_id', accountId)
+      .maybeSingle()
 
     if (!access_token || !phone_number_id) {
       return NextResponse.json(
         { error: 'access_token and phone_number_id are required' },
         { status: 400 }
+      )
+    }
+
+    const appSecretProvided =
+      typeof app_secret === 'string' && app_secret.trim().length > 0
+    if (!existing && !appSecretProvided) {
+      return NextResponse.json(
+        { error: 'app_secret is required for initial setup' },
+        { status: 400 },
       )
     }
 
@@ -253,9 +283,11 @@ export async function POST(request: Request) {
 
     // Encrypt sensitive tokens before storing
     let encryptedAccessToken: string
+    let encryptedAppSecret: string | undefined
     let encryptedVerifyToken: string | null
     try {
       encryptedAccessToken = encrypt(access_token)
+      if (appSecretProvided) encryptedAppSecret = encrypt(app_secret.trim())
       encryptedVerifyToken = verify_token ? encrypt(verify_token) : null
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unknown encryption error'
@@ -268,15 +300,6 @@ export async function POST(request: Request) {
         { status: 500 }
       )
     }
-
-    // Look up any pre-existing row for this account so we know whether
-    // this number is already registered with Meta — if so we can skip
-    // /register when the user didn't provide a PIN this time around.
-    const { data: existing } = await supabase
-      .from('whatsapp_config')
-      .select('id, registered_at, phone_number_id')
-      .eq('account_id', accountId)
-      .maybeSingle()
 
     const sameNumber =
       existing?.phone_number_id === phone_number_id &&
@@ -357,6 +380,7 @@ export async function POST(request: Request) {
       phone_number_id,
       waba_id: waba_id || null,
       access_token: encryptedAccessToken,
+      ...(encryptedAppSecret ? { app_secret: encryptedAppSecret } : {}),
       verify_token: encryptedVerifyToken,
       status: registrationError ? 'disconnected' : 'connected',
       connected_at: registrationError ? null : new Date().toISOString(),

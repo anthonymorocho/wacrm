@@ -1,18 +1,16 @@
 # Security Policy
 
-Thanks for taking the time to look into the security of this template.
+Thanks for helping keep CRM secure.
 
 ## Reporting a vulnerability
 
 **Do not open a public GitHub issue for security bugs.** Public issues are
-indexed by search engines and seen by every fork long before the upstream fix
-lands.
+indexed by search engines before a fix is available.
 
 Instead, please report privately via one of:
 
-- [GitHub Security Advisories](https://github.com/ArnasDon/wacrm/security/advisories/new)
+- [GitHub Security Advisories](https://github.com/anthonymorocho/wacrm/security/advisories/new)
   (preferred — keeps the disclosure, fix, and CVE all in one place).
-- Email: `a.donauskas@hostinger.com` with `[CRM template security]` in the subject.
 
 Include, if you can:
 
@@ -34,7 +32,7 @@ Include, if you can:
 ## Scope
 
 In scope:
-- Anything in this repository (`ArnasDon/wacrm`), including webhook and auth
+- Anything in this repository (`anthonymorocho/wacrm`), including webhook and auth
   flows, token encryption, RLS policies, and the built-in cron endpoints.
 - Default configurations shipped in `docs/` — e.g. if the setup guide leaves
   an unsafe default.
@@ -59,4 +57,4 @@ action against anyone who:
 - Gives us reasonable time to respond before any public disclosure.
 - Doesn't exploit the issue beyond what's necessary to demonstrate it.
 
-Thanks for helping keep this template (and its forks) safe.
+Thanks for helping keep CRM safe.

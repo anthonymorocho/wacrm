@@ -321,7 +321,7 @@ always did.
   Existing deals keep the currency they were saved with — totals are
   shown in the account default with no exchange-rate conversion (one
   currency per account). Full guide:
-  [Default currency](https://wacrm.tech/docs/settings#deals).
+  [Default currency](https://github.com/anthonymorocho/wacrm/tree/main/docs).
 - **Members tab in Settings.** The user-facing surface for the
   multi-user APIs below, available to everyone (no beta flag). From
   Settings → **Members** an admin or owner can: see who's on the
@@ -330,7 +330,7 @@ always did.
   expiry), revoke pending invites, change a member's role, remove a
   member, and — as owner — transfer ownership. Recipients accept via
   a public `/join/[token]` page. Full guide:
-  [Members docs](https://wacrm.tech/docs/members).
+  [Members docs](https://github.com/anthonymorocho/wacrm/tree/main/docs).
 - **Account & member management API** — server-side endpoints
   backing the Members tab. All routes are role-gated and
   return Supabase-RLS-scoped data.

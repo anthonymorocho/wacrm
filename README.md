@@ -1,8 +1,8 @@
-# wacrm — CRM Template for WhatsApp
+# CRM — WhatsApp CRM
 
-> Self-hostable CRM template for WhatsApp® — shared inbox, contacts,
-> sales pipelines, broadcasts, and no-code automations. Fork it, brand
-> it, host it.
+> Self-hostable CRM for WhatsApp® — shared inbox, contacts, sales
+> pipelines, broadcasts, and no-code automations. Configure it with
+> your own brand, domain, and business data.
 
 <p align="center">
   <a href="https://www.hostinger.com/web-apps-hosting">
@@ -11,15 +11,13 @@
 </p>
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-violet.svg)](./LICENSE)
-[![CI](https://github.com/ArnasDon/wacrm/actions/workflows/ci.yml/badge.svg)](https://github.com/ArnasDon/wacrm/actions/workflows/ci.yml)
+[![CI](https://github.com/anthonymorocho/wacrm/actions/workflows/ci.yml/badge.svg)](https://github.com/anthonymorocho/wacrm/actions/workflows/ci.yml)
 [![Next.js 16](https://img.shields.io/badge/Next.js-16-black?logo=nextdotjs)](https://nextjs.org)
 [![Supabase](https://img.shields.io/badge/Supabase-Postgres%20%2B%20Auth-3ecf8e?logo=supabase)](https://supabase.com)
-[![Stars](https://img.shields.io/github/stars/ArnasDon/wacrm?style=social)](https://github.com/ArnasDon/wacrm/stargazers)
+[![Stars](https://img.shields.io/github/stars/anthonymorocho/wacrm?style=social)](https://github.com/anthonymorocho/wacrm/stargazers)
 
-The marketing site and self-host docs live in a separate repo:
-[ArnasDon/wacrm-site](https://github.com/ArnasDon/wacrm-site)
-([wacrm.tech](https://wacrm.tech)). This repo is the product —
-clone or fork it to run your own CRM.
+This repository contains the application, database migrations, API
+documentation, and deployment files for your CRM.
 
 ## What you get out of the box
 
@@ -55,9 +53,9 @@ clone or fork it to run your own CRM.
   Read-only by default, opt-in writes. See [docs/mcp.md](./docs/mcp.md)
   (server in [`mcp-server/`](./mcp-server)).
 
-## Why fork this?
+## Why use this CRM?
 
-This is a **template**, not a product. Forking means you get:
+You get:
 
 - **Full ownership** — your code, your Supabase project, your domain,
   your data. No SaaS lock-in, no seat pricing, no trust dance.
@@ -66,7 +64,7 @@ This is a **template**, not a product. Forking means you get:
   purpose (Next.js + Supabase + Tailwind) so the learning curve is
   short.
 - **Zero ops to start** — [Hostinger](https://www.hostinger.com/web-apps-hosting)
-  Managed Node.js deploys a fork in a few clicks. No Docker, no
+  Managed Node.js deploys the app in a few clicks. No Docker, no
   Kubernetes, no infra team needed.
   ([See below ↓](#-deploy-on-hostinger-recommended))
 - **Real security primitives** — token encryption (AES-256-GCM), RLS
@@ -79,8 +77,7 @@ in an afternoon and make yours.
 ## Quick start
 
 ```bash
-# Fork on GitHub first: https://github.com/ArnasDon/wacrm → Fork
-git clone https://github.com/<your-username>/wacrm.git
+git clone https://github.com/anthonymorocho/wacrm.git
 cd wacrm
 npm install
 cp .env.local.example .env.local   # fill in Supabase + Meta creds
@@ -101,12 +98,12 @@ Dockerfile + Docker Compose setup.
   </a>
 </p>
 <p align="center">
-  <a href="https://wacrm.tech/docs/deployment-hostinger">
-    <img src="https://img.shields.io/badge/Step--by--step_guide-wacrm.tech%2Fdocs-111?style=for-the-badge" alt="Step-by-step guide" height="44">
+  <a href="./docs/docker.md">
+    <img src="https://img.shields.io/badge/Deployment-docs-111?style=for-the-badge" alt="Deployment documentation" height="44">
   </a>
 </p>
 
-**wacrm is built to run on [Hostinger](https://www.hostinger.com/web-apps-hosting).**
+**CRM is built to run on [Hostinger](https://www.hostinger.com/web-apps-hosting).**
 It's the path we test, document, and recommend — and the fastest way
 to get a production-grade CRM live without owning a VPS or a
 Kubernetes cluster.
@@ -115,7 +112,7 @@ Kubernetes cluster.
 
 | | |
 |---|---|
-| **One-click Git deploy** | Connect your fork, push to `main`, Hostinger builds and ships it. No SSH, no Docker, no CI to wire up — this repo's own `main` deploys this way. |
+| **One-click Git deploy** | Connect your repository, push to `main`, Hostinger builds and ships it. No SSH, no Docker, no CI to wire up — this repo's own `main` deploys this way. |
 | **Managed Node.js** | Next.js 16 (App Router, server actions, ISR) runs out of the box on [Premium, Business, and Cloud](https://www.hostinger.com/web-apps-hosting) shared plans. You don't manage Node versions, processes, or reverse proxies. |
 | **Free SSL + free domain** | Automatic Let's Encrypt on your custom domain (or a free one included with annual plans). HTTPS is on by default — required for the WhatsApp Business webhook. |
 | **Global CDN + LiteSpeed** | Static assets cached at the edge, dynamic routes served from LiteSpeed. Snappy dashboards out of the box, no Cloudflare setup required. |
@@ -126,34 +123,25 @@ Kubernetes cluster.
 
 ### The 60-second version
 
-1. **Fork** this repo on GitHub.
+1. Connect this repository in Hostinger.
 2. In **hPanel → Websites → Create**, pick **Node.js** and connect
-   your fork.
+   your repository.
 3. Paste your Supabase + Meta env vars into hPanel.
 4. Push to `main`. Hostinger builds and serves it. Done.
 
-Full walkthrough with screenshots:
-**[wacrm.tech/docs/deployment-hostinger](https://wacrm.tech/docs/deployment-hostinger)**.
-
-> _Note: wacrm is MIT-licensed and runs anywhere Node.js does
+> _Note: CRM is MIT-licensed and runs anywhere Node.js does
 > (Vercel, Railway, your own VPS). Hostinger is recommended, not
 > required._
 
 ## Documentation
 
-Full self-host documentation — Supabase migrations, WhatsApp Business
-API config, and production deploy — lives at
-**[wacrm.tech/docs](https://wacrm.tech/docs)**
-(source: [ArnasDon/wacrm-site](https://github.com/ArnasDon/wacrm-site)).
+Self-host documentation — Supabase migrations, WhatsApp Business API
+configuration, and deployment — lives in this repository.
 
 Key pages:
-- [Getting started](https://wacrm.tech/docs/getting-started)
-- [Supabase setup](https://wacrm.tech/docs/supabase-setup)
-- [WhatsApp setup](https://wacrm.tech/docs/whatsapp-setup)
-- [Environment variables](https://wacrm.tech/docs/environment-variables)
-- [Deploy on Hostinger](https://wacrm.tech/docs/deployment-hostinger)
-- [Architecture](https://wacrm.tech/docs/architecture)
-- [Troubleshooting](https://wacrm.tech/docs/troubleshooting)
+- [Docker deployment](./docs/docker.md)
+- [Public API](./docs/public-api.md)
+- [MCP server](./docs/mcp.md)
 
 ## Stack
 
@@ -163,13 +151,10 @@ Key pages:
 
 ## Contributing
 
-This is a template, not a collaborative product — the expected flow is
-fork → customise → deploy, **not** upstream contribution. Bug reports
-and security issues are welcome; feature PRs often belong in your fork
-rather than here. Details in
+Bug reports, security issues, and focused improvements are welcome. See
 [`CONTRIBUTING.md`](./CONTRIBUTING.md) and
 [`.github/SECURITY.md`](./.github/SECURITY.md).
 
 ## License
 
-[MIT](./LICENSE). Fork it, brand it, host it.
+[MIT](./LICENSE). Keep this notice with the project when distributing it.

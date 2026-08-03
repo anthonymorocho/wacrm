@@ -48,20 +48,22 @@ export function DealConversationSheet({
     if (!open || !deal) return;
     let cancelled = false;
 
-    // Reset the previous thread before loading the newly selected deal.
-    // This is intentional synchronization with the selected sheet item.
-    setConversation(null);
-    setContact(null);
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setMessages([]);
-
-    if (!deal.conversation_id) {
-      setLoading(false);
-      return;
-    }
-
-    setLoading(true);
     void (async () => {
+      // Wait until the effect callback yields before clearing the previous
+      // thread. This keeps the sheet from briefly showing stale content and
+      // avoids a synchronous cascading render inside the effect.
+      await Promise.resolve();
+      if (cancelled) return;
+      setLoading(true);
+      setConversation(null);
+      setContact(null);
+      setMessages([]);
+
+      if (!deal.conversation_id) {
+        setLoading(false);
+        return;
+      }
+
       const { data, error } = await createClient()
         .from("conversations")
         .select(CONVERSATION_SELECT)

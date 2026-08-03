@@ -6,30 +6,14 @@ body:
   - type: markdown
     attributes:
       value: |
-        Thanks for the idea — but read this first.
-
-        This is a **template**, not a collaborative product. The
-        upstream scope is intentionally narrow, so most feature
-        requests end up as *"build this in your fork"* rather than
-        landing here. That's the point of a template.
-
-        When an upstream feature request *is* useful:
-
-        - It fixes a correctness problem in the template.
-        - It makes the template cleaner for the next forker (reducing
-          friction, removing footguns).
-        - It's in scope for "a generic WhatsApp CRM template" rather
-          than a bet on your specific workflow.
-
-        If the feature is really for your own deployment, fork and
-        build it there — see
-        [CONTRIBUTING.md](https://github.com/ArnasDon/wacrm/blob/main/CONTRIBUTING.md).
+        Thanks for the idea. Describe the user problem and the outcome
+        you would like to achieve so it can be evaluated clearly.
 
   - type: textarea
     id: problem
     attributes:
       label: What's the problem?
-      description: What are you trying to do today that the template makes harder than it should?
+      description: What are you trying to do today that CRM makes harder than it should?
       placeholder: |
         When a broadcast ends I have no way to see which recipients
         didn't reply so I can follow up manually.

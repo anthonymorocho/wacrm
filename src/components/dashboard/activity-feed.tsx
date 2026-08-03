@@ -103,7 +103,7 @@ export function ActivityFeed({ items, loading }: ActivityFeedProps) {
                     <Icon className="h-3.5 w-3.5" />
                   </span>
                   <span className="min-w-0 flex-1 truncate text-sm text-foreground">
-                    {it.text}
+                    {localizeActivity(it, t)}
                   </span>
                   <span className="flex-shrink-0 text-xs text-muted-foreground tabular-nums">
                     {relativeTime(it.at, t)}
@@ -155,6 +155,44 @@ export function ActivityFeed({ items, loading }: ActivityFeedProps) {
       )}
     </section>
   )
+}
+
+function localizeActivity(
+  item: ActivityItem,
+  t: ReturnType<typeof useTranslations>,
+): string {
+  switch (item.kind) {
+    case 'message': {
+      const match = item.text.match(/^New message from (.+)$/)
+      return match ? t('newMessageFrom', { who: match[1] }) : item.text
+    }
+    case 'contact': {
+      const match = item.text.match(/^New contact: (.+)$/)
+      return match ? t('newContact', { who: match[1] }) : item.text
+    }
+    case 'deal': {
+      const inStage = item.text.match(/^Deal "(.+)" in (.+)$/)
+      if (inStage) return t('dealInStage', { title: inStage[1], stage: inStage[2] })
+      const updated = item.text.match(/^Deal "(.+)" updated$/)
+      return updated ? t('dealUpdated', { title: updated[1] }) : item.text
+    }
+    case 'broadcast': {
+      const sent = item.text.match(/^Broadcast "(.+)" sent to (\d+) contacts$/)
+      if (sent) return t('broadcastSent', { name: sent[1], count: sent[2] })
+      const status = item.text.match(/^Broadcast "(.+)" (.+) \((\d+) recipients\)$/)
+      return status
+        ? t('broadcastStatus', { name: status[1], status: status[2], count: status[3] })
+        : item.text
+    }
+    case 'automation': {
+      const failed = item.text.match(/^Automation "(.+)" failed for (.+)$/)
+      if (failed) return t('automationFailedFor', { name: failed[1], who: failed[2] })
+      const triggered = item.text.match(/^Automation "(.+)" triggered for (.+)$/)
+      return triggered
+        ? t('automationTriggeredFor', { name: triggered[1], who: triggered[2] })
+        : item.text
+    }
+  }
 }
 
 function relativeTime(iso: string, t: ReturnType<typeof useTranslations>): string {

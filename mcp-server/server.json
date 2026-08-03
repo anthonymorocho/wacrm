@@ -1,9 +1,9 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
-  "name": "io.github.ArnasDon/wacrm-mcp",
-  "description": "Drive a self-hosted wacrm WhatsApp CRM from Claude, Cursor and other MCP clients.",
+  "name": "io.github.anthonymorocho/wacrm-mcp",
+  "description": "Drive a self-hosted WhatsApp CRM from Claude, Cursor and other MCP clients.",
   "repository": {
-    "url": "https://github.com/ArnasDon/wacrm",
+    "url": "https://github.com/anthonymorocho/wacrm",
     "source": "github",
     "subfolder": "mcp-server"
   },
@@ -19,14 +19,14 @@
       "environmentVariables": [
         {
           "name": "WACRM_BASE_URL",
-          "description": "Base URL of your wacrm instance, e.g. https://crm.example.com",
+          "description": "Base URL of your CRM instance, e.g. https://crm.example.com",
           "isRequired": true,
           "isSecret": false,
           "format": "string"
         },
         {
           "name": "WACRM_API_KEY",
-          "description": "wacrm API key (Settings → API keys). Its scopes decide what is allowed.",
+          "description": "CRM API key (Settings → API keys). Its scopes decide what is allowed.",
           "isRequired": true,
           "isSecret": true,
           "format": "string"

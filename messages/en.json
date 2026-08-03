@@ -60,6 +60,10 @@
   "ModeToggle": {
     "switchMode": "Switch to {mode} mode"
   },
+  "LanguageToggle": {
+    "label": "Language",
+    "current": "Current language: {language}"
+  },
   "Dashboard": {
     "page": {
       "title": "Dashboard",

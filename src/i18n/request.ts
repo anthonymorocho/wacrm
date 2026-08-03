@@ -1,19 +1,26 @@
 import { getRequestConfig } from 'next-intl/server';
+import { cookies, headers } from 'next/headers';
+import { mergeMessages, resolveLocale } from './locales';
 
 export default getRequestConfig(async () => {
-  // Read the locale from the environment, defaulting to 'en'
-  const locale = process.env.NEXT_PUBLIC_APP_LOCALE || 'en';
+  const cookieStore = await cookies();
+  const headerStore = await headers();
+  const locale = resolveLocale({
+    cookie: cookieStore.get('NEXT_LOCALE')?.value,
+    acceptLanguage: headerStore.get('accept-language'),
+    configured: process.env.NEXT_PUBLIC_APP_LOCALE,
+  });
 
-  let messages;
+  const english = (await import('../../messages/en.json')).default;
+  let translated = english;
   try {
-    messages = (await import(`../../messages/${locale}.json`)).default;
-  } catch (error) {
-    // Fallback to English if the dictionary for the requested locale doesn't exist yet
-    messages = (await import(`../../messages/en.json`)).default;
+    translated = (await import(`../../messages/${locale}.json`)).default;
+  } catch {
+    // English remains the complete source dictionary.
   }
 
   return {
     locale,
-    messages
+    messages: locale === 'en' ? english : mergeMessages(english, translated),
   };
 });

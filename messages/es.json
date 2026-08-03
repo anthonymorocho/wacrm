@@ -1,0 +1,76 @@
+{
+  "LoginPage": {
+    "titleWelcome": "Bienvenido de nuevo",
+    "descWelcome": "Inicia sesión en tu cuenta",
+    "emailLabel": "Correo electrónico",
+    "passwordLabel": "Contraseña",
+    "forgotPassword": "¿Olvidaste tu contraseña?",
+    "signIn": "Iniciar sesión",
+    "noAccount": "¿No tienes una cuenta?",
+    "createAccount": "Crear cuenta"
+  },
+  "Sidebar": {
+    "title": "CRM para WhatsApp",
+    "dashboard": "Panel",
+    "inbox": "Bandeja de entrada",
+    "notifications": "Notificaciones",
+    "contacts": "Contactos",
+    "pipelines": "Embudos",
+    "broadcasts": "Campañas",
+    "automations": "Automatizaciones",
+    "flows": "Flujos",
+    "aiAgents": "Agentes IA",
+    "settings": "Configuración",
+    "beta": "Beta",
+    "roleOwner": "Propietario",
+    "roleAdmin": "Administrador",
+    "roleAgent": "Agente",
+    "roleViewer": "Observador",
+    "closeMenu": "Cerrar menú",
+    "defaultUser": "Usuario",
+    "defaultAvatar": "Avatar",
+    "menuProfile": "Perfil",
+    "menuSettings": "Configuración",
+    "menuSignOut": "Cerrar sesión"
+  },
+  "Header": {
+    "dashboard": "Panel",
+    "inbox": "Bandeja de entrada",
+    "notifications": "Notificaciones",
+    "contacts": "Contactos",
+    "pipelines": "Embudos",
+    "broadcasts": "Campañas",
+    "automations": "Automatizaciones",
+    "settings": "Configuración",
+    "openMenu": "Abrir menú",
+    "openAccountMenu": "Abrir menú de cuenta",
+    "defaultUser": "Usuario",
+    "defaultAvatar": "Avatar",
+    "menuProfile": "Perfil",
+    "menuSettings": "Configuración",
+    "menuSignOut": "Cerrar sesión"
+  },
+  "ModeToggle": {
+    "switchMode": "Cambiar al modo {mode}"
+  },
+  "LanguageToggle": {
+    "label": "Idioma",
+    "current": "Idioma actual: {language}"
+  },
+  "Dashboard": {
+    "page": {
+      "title": "Panel",
+      "description": "Analítica en vivo de conversaciones, contactos, negocios, campañas y automatizaciones.",
+      "activeConversations": "Conversaciones activas",
+      "newContactsToday": "Contactos nuevos hoy",
+      "openDealsValue": "Valor de negocios abiertos",
+      "messagesSentToday": "Mensajes enviados hoy",
+      "newTodayVsYesterday": "nuevos hoy frente a ayer",
+      "vsYesterday": "frente a ayer",
+      "noChange": "Sin cambios {suffix}"
+    }
+  },
+  "Settings": {
+    "pageTitle": "Configuración"
+  }
+}

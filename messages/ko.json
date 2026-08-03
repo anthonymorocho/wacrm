@@ -60,6 +60,10 @@
   "ModeToggle": {
     "switchMode": "{mode} 모드로 전환"
   },
+  "LanguageToggle": {
+    "label": "언어",
+    "current": "현재 언어: {language}"
+  },
   "Dashboard": {
     "page": {
       "title": "대시보드",

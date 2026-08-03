@@ -11,6 +11,7 @@ import { describe, expect, it } from 'vitest';
 const MESSAGES_DIR = join(process.cwd(), 'messages');
 const SOURCE_LOCALE = 'en';
 const TRANSLATED_LOCALES = ['ko'];
+const PARTIAL_TRANSLATED_LOCALES = ['es'];
 
 function loadKeys(locale: string): Set<string> {
   const raw = readFileSync(join(MESSAGES_DIR, `${locale}.json`), 'utf8');
@@ -38,6 +39,12 @@ describe('message catalogue parity', () => {
   });
 
   it.each(TRANSLATED_LOCALES)('%s.json has no orphaned keys', (locale) => {
+    const translated = loadKeys(locale);
+    const orphaned = [...translated].filter((k) => !source.has(k)).sort();
+    expect(orphaned, `${locale}.json has keys absent from en.json`).toEqual([]);
+  });
+
+  it.each(PARTIAL_TRANSLATED_LOCALES)('%s.json only overrides known keys', (locale) => {
     const translated = loadKeys(locale);
     const orphaned = [...translated].filter((k) => !source.has(k)).sort();
     expect(orphaned, `${locale}.json has keys absent from en.json`).toEqual([]);

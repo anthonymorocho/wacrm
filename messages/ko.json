@@ -492,6 +492,7 @@
       "selectPipeline": "파이프라인 선택",
       "noPipelinesYet": "아직 파이프라인이 없습니다",
       "managePipelines": "파이프라인 관리",
+      "editPipelineTitle": "파이프라인 제목 편집",
       "addPipeline": "파이프라인 추가",
       "addDeal": "딜 추가",
       "createToStartTracking": "파이프라인을 만들어 딜 추적을 시작하세요",

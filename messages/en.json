@@ -492,6 +492,7 @@
       "selectPipeline": "Select Pipeline",
       "noPipelinesYet": "No pipelines yet",
       "managePipelines": "Manage Pipelines",
+      "editPipelineTitle": "Edit pipeline title",
       "addPipeline": "Add Pipeline",
       "addDeal": "Add Deal",
       "createToStartTracking": "Create a pipeline to start tracking deals",

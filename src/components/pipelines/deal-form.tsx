@@ -249,16 +249,16 @@ export function DealForm({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
         side="right"
-        className="bg-popover border-border text-popover-foreground sm:max-w-lg w-full p-0"
+        className="w-full min-w-0 overflow-hidden border-border bg-popover p-0 text-popover-foreground sm:!max-w-lg"
       >
-        <div className="flex h-full flex-col">
+        <div className="flex h-full min-w-0 flex-col">
           <SheetHeader className="border-b border-border/50 p-4">
             <SheetTitle className="text-popover-foreground">
               {deal ? t("editDeal") : t("newDeal")}
             </SheetTitle>
           </SheetHeader>
 
-          <div className="flex-1 overflow-y-auto p-4 space-y-4">
+          <div className="min-w-0 flex-1 space-y-4 overflow-x-hidden overflow-y-auto p-4">
             <div className="grid gap-2">
               <Label className="text-muted-foreground">{t("title")}</Label>
               <Input
@@ -295,7 +295,7 @@ export function DealForm({
               )}
             </div>
 
-            <div className="grid grid-cols-[1fr_110px] gap-3">
+            <div className="grid gap-3 sm:grid-cols-[1fr_110px]">
               <div className="grid gap-2">
                 <Label className="text-muted-foreground">{t("value")}</Label>
                 <div className="relative">
@@ -381,12 +381,12 @@ export function DealForm({
                 <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
                   {t("status")}
                 </p>
-                <div className="flex gap-2">
+                <div className="grid gap-2 sm:grid-cols-2">
                   <Button
                     type="button"
                     onClick={() => handleStatusChange("won")}
                     disabled={!!statusAction || deal.status === "won"}
-                    className="flex-1 bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+                    className="min-w-0 bg-primary px-2 text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
                   >
                     {statusAction === "won" ? (
                       <Loader2 className="h-4 w-4 animate-spin" />
@@ -401,7 +401,7 @@ export function DealForm({
                     type="button"
                     onClick={() => handleStatusChange("lost")}
                     disabled={!!statusAction || deal.status === "lost"}
-                    className="flex-1 bg-red-600 text-white hover:bg-red-700 disabled:opacity-50"
+                    className="min-w-0 bg-red-600 px-2 text-white hover:bg-red-700 disabled:opacity-50"
                   >
                     {statusAction === "lost" ? (
                       <Loader2 className="h-4 w-4 animate-spin" />

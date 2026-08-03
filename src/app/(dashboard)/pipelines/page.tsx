@@ -25,7 +25,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { GitBranch, Plus, ChevronDown, Settings } from "lucide-react";
+import { GitBranch, Plus, ChevronDown, Pencil, Settings } from "lucide-react";
 import { toast } from "sonner";
 import { useCan } from "@/hooks/use-can";
 import { useAuth } from "@/hooks/use-auth";
@@ -391,6 +391,20 @@ export default function PipelinesPage() {
               )}
             </DropdownMenuContent>
           </DropdownMenu>
+          {selectedPipeline && (
+            <GatedButton
+              variant="ghost"
+              size="icon"
+              canAct={canEditSettings}
+              gateReason="edit pipeline titles"
+              title={t("editPipelineTitle")}
+              aria-label={t("editPipelineTitle")}
+              onClick={() => setSettingsOpen(true)}
+              className="h-9 w-9 text-muted-foreground hover:bg-muted hover:text-foreground"
+            >
+              <Pencil className="h-4 w-4" />
+            </GatedButton>
+          )}
         </div>
 
         <div className="flex items-center gap-2">

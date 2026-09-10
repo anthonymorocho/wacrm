@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   isActiveInboxConversation,
+  isQueuedInboxConversation,
   matchesContactFilters,
   normalizeConversation,
 } from "./conversations";
@@ -102,13 +103,44 @@ describe("matchesContactFilters", () => {
 });
 
 describe("isActiveInboxConversation", () => {
-  it("excludes closed conversations from the default Inbox view", () => {
-    expect(isActiveInboxConversation(makeConversation(null))).toBe(true);
+  it("includes only open or pending conversations with an assigned agent", () => {
     expect(
-      isActiveInboxConversation({ ...makeConversation(null), status: "pending" }),
+      isActiveInboxConversation({
+        ...makeConversation(null),
+        assigned_agent_id: "agent-1",
+      }),
+    ).toBe(true);
+    expect(
+      isActiveInboxConversation({
+        ...makeConversation(null),
+        status: "pending",
+        assigned_agent_id: "agent-1",
+      }),
     ).toBe(true);
     expect(
       isActiveInboxConversation({ ...makeConversation(null), status: "closed" }),
+    ).toBe(false);
+    expect(isActiveInboxConversation(makeConversation(null))).toBe(false);
+  });
+});
+
+describe("isQueuedInboxConversation", () => {
+  it("includes only non-closed conversations without an assigned agent", () => {
+    expect(isQueuedInboxConversation(makeConversation(null))).toBe(true);
+    expect(
+      isQueuedInboxConversation({
+        ...makeConversation(null),
+        status: "pending",
+      }),
+    ).toBe(true);
+    expect(
+      isQueuedInboxConversation({
+        ...makeConversation(null),
+        assigned_agent_id: "agent-1",
+      }),
+    ).toBe(false);
+    expect(
+      isQueuedInboxConversation({ ...makeConversation(null), status: "closed" }),
     ).toBe(false);
   });
 });

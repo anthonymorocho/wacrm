@@ -144,6 +144,7 @@
     "conversationList": {
       "searchPlaceholder": "Search conversations...",
       "filterActive": "Active",
+      "filterQueue": "Queue",
       "filterUnread": "Unread",
       "filterOpen": "Open",
       "filterPending": "Pending",

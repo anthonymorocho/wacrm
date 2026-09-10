@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import {
   CONVERSATION_SELECT,
   isActiveInboxConversation,
+  isQueuedInboxConversation,
   matchesContactFilters,
   normalizeConversations,
 } from "@/lib/inbox/conversations";
@@ -45,7 +46,7 @@ const STATUS_COLORS: Record<ConversationStatus, string> = {
 
 
 
-type InboxFilter = ConversationStatus | "active" | "unread";
+type InboxFilter = ConversationStatus | "active" | "queue" | "unread";
 
 export function ConversationList({
   activeConversationId,
@@ -58,6 +59,7 @@ export function ConversationList({
   
   const FILTER_OPTIONS: { label: string; value: InboxFilter }[] = useMemo(() => [
     { label: t("filterActive"), value: "active" },
+    { label: t("filterQueue"), value: "queue" },
     { label: t("filterUnread"), value: "unread" },
     { label: t("filterOpen"), value: "open" },
     { label: t("filterPending"), value: "pending" },
@@ -189,12 +191,18 @@ export function ConversationList({
 
     if (filter === "active") {
       result = result.filter(isActiveInboxConversation);
+    } else if (filter === "queue") {
+      result = result.filter(isQueuedInboxConversation);
     } else if (filter === "unread") {
       result = result.filter(
         (c) => isActiveInboxConversation(c) && c.unread_count > 0,
       );
+    } else if (filter === "closed") {
+      result = result.filter((c) => c.status === "closed");
     } else {
-      result = result.filter((c) => c.status === filter);
+      result = result.filter(
+        (c) => c.status === filter && isActiveInboxConversation(c),
+      );
     }
 
     // Contact-based filters (tags via OR logic, exact company match).

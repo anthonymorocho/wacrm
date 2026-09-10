@@ -144,6 +144,7 @@
     "conversationList": {
       "searchPlaceholder": "대화 검색...",
       "filterActive": "활성",
+      "filterQueue": "대기열",
       "filterUnread": "읽지 않음",
       "filterOpen": "열림",
       "filterPending": "대기 중",

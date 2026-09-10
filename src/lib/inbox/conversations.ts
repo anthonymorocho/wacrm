@@ -42,12 +42,24 @@ export function normalizeConversations(
   return rows.map(normalizeConversation);
 }
 
-/** Closed conversations stay available through the explicit Closed filter,
- * but are not part of the active Inbox view. */
+/**
+ * Active Inbox work is limited to open/pending conversations that already
+ * have an agent. Unassigned work belongs in the explicit queue view.
+ */
 export function isActiveInboxConversation(
-  conversation: Pick<Conversation, "status">,
+  conversation: Pick<Conversation, "status" | "assigned_agent_id">,
 ): boolean {
-  return conversation.status !== "closed";
+  return (
+    conversation.status !== "closed" &&
+    Boolean(conversation.assigned_agent_id)
+  );
+}
+
+/** Queued work is open/pending and waiting for an eligible agent. */
+export function isQueuedInboxConversation(
+  conversation: Pick<Conversation, "status" | "assigned_agent_id">,
+): boolean {
+  return conversation.status !== "closed" && !conversation.assigned_agent_id;
 }
 
 export interface ContactFilters {

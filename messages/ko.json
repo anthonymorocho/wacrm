@@ -1508,6 +1508,18 @@
       "ownerHint": "계정과 결제에 대한 전체 권한"
     },
     "whatsapp": {
+      "embeddedTitle": "Meta Embedded Signup으로 연결",
+      "embeddedDescription": "액세스 토큰이나 App Secret을 CRM에 붙여넣지 않고 Meta를 통해 WhatsApp Business 계정을 연결합니다.",
+      "embeddedConnect": "Meta로 연결",
+      "embeddedConnecting": "Meta 여는 중...",
+      "embeddedLoading": "Embedded Signup 확인 중...",
+      "embeddedNotConfigured": "이 서버에 Embedded Signup이 구성되지 않았습니다.",
+      "embeddedUnavailable": "현재 Embedded Signup을 사용할 수 없습니다.",
+      "embeddedCancelled": "Meta 연결이 취소되었습니다.",
+      "embeddedMetaRejected": "Meta가 연결을 거부했습니다. 앱 권한을 확인하고 다시 시도하세요.",
+      "embeddedConnected": "Meta를 통해 WhatsApp이 연결되었습니다.",
+      "embeddedConnectedNeedsRegistration": "WhatsApp이 연결되었지만 수신 등록에는 아래의 6자리 PIN이 필요합니다.",
+      "embeddedSetupHint": "Meta가 보안 창을 엽니다. CRM은 인증 결과와 선택한 계정 ID만 받습니다.",
       "title": "WhatsApp 연결",
       "description": "Meta WhatsApp 비즈니스 API를 연결하세요. 자격 증명, 웹훅, 설정 단계가 모두 여기 있습니다.",
       "tokenCorrupted": "저장된 토큰을 복호화할 수 없습니다",

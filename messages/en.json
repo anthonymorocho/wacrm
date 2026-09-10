@@ -1508,6 +1508,18 @@
       "ownerHint": "Full control over account and billing"
     },
     "whatsapp": {
+      "embeddedTitle": "Connect with Meta Embedded Signup",
+      "embeddedDescription": "Connect a WhatsApp Business account through Meta without pasting an access token or App Secret into the CRM.",
+      "embeddedConnect": "Connect with Meta",
+      "embeddedConnecting": "Opening Meta...",
+      "embeddedLoading": "Checking Embedded Signup...",
+      "embeddedNotConfigured": "Embedded Signup is not configured on this server.",
+      "embeddedUnavailable": "Embedded Signup is currently unavailable.",
+      "embeddedCancelled": "The Meta connection was cancelled.",
+      "embeddedMetaRejected": "Meta rejected the connection. Check the app permissions and try again.",
+      "embeddedConnected": "WhatsApp connected through Meta.",
+      "embeddedConnectedNeedsRegistration": "WhatsApp was connected, but inbound registration still needs the 6-digit PIN below.",
+      "embeddedSetupHint": "Meta will open a secure window. The CRM receives only the authorization result and selected account IDs.",
       "title": "WhatsApp connection",
       "description": "Connect your Meta WhatsApp Business API. Credentials, webhook, and setup steps all live here.",
       "tokenCorrupted": "Stored token can't be decrypted",

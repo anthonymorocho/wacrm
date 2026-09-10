@@ -714,6 +714,18 @@
       "toastDeleteError": "No se pudo eliminar la plantilla"
     },
     "whatsapp": {
+      "embeddedTitle": "Conectar con Meta Embedded Signup",
+      "embeddedDescription": "Conecta una cuenta de WhatsApp Business mediante Meta sin pegar un token de acceso ni el App Secret en el CRM.",
+      "embeddedConnect": "Conectar con Meta",
+      "embeddedConnecting": "Abriendo Meta...",
+      "embeddedLoading": "Comprobando Embedded Signup...",
+      "embeddedNotConfigured": "Embedded Signup no esta configurado en este servidor.",
+      "embeddedUnavailable": "Embedded Signup no esta disponible por ahora.",
+      "embeddedCancelled": "Se cancelo la conexion con Meta.",
+      "embeddedMetaRejected": "Meta rechazo la conexion. Revisa los permisos de la aplicacion e intentalo de nuevo.",
+      "embeddedConnected": "WhatsApp se conecto mediante Meta.",
+      "embeddedConnectedNeedsRegistration": "WhatsApp se conecto, pero el registro de mensajes entrantes aun necesita el PIN de 6 digitos de abajo.",
+      "embeddedSetupHint": "Meta abrira una ventana segura. El CRM solo recibe el resultado de autorizacion y los IDs seleccionados.",
       "title": "Conexión de WhatsApp",
       "description": "Conecta tu API de WhatsApp Business de Meta. Aquí están las credenciales, el webhook y los pasos de configuración.",
       "tokenCorrupted": "No se puede descifrar el token guardado",

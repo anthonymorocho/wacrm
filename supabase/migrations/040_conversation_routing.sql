@@ -99,54 +99,40 @@ BEGIN
   -- Release only conversations that still await a human response. Bot
   -- messages do not satisfy this condition, so a handled conversation keeps
   -- its owner even when that owner goes stale or offline.
-  UPDATE conversations c
+  WITH releasable AS (
+    SELECT conv.id
+    FROM conversations AS conv
+    LEFT JOIN member_presence AS mp
+      ON mp.user_id = conv.assigned_agent_id
+     AND mp.account_id = p_account_id
+    LEFT JOIN LATERAL (
+      SELECT
+        max(m.created_at) FILTER (WHERE m.sender_type = 'customer')
+          AS latest_customer_at,
+        max(m.created_at) FILTER (WHERE m.sender_type = 'agent')
+          AS latest_human_at
+      FROM messages AS m
+      WHERE m.conversation_id = conv.id
+    ) AS latest ON TRUE
+    WHERE conv.account_id = p_account_id
+      AND conv.status IN ('open', 'pending')
+      AND (
+        mp.user_id IS NULL
+        OR mp.availability = 'offline'
+        OR mp.last_seen_at < now() - INTERVAL '75 seconds'
+      )
+      AND latest.latest_customer_at IS NOT NULL
+      AND (
+        latest.latest_human_at IS NULL
+        OR latest.latest_customer_at > latest.latest_human_at
+      )
+  )
+  UPDATE conversations AS target
   SET assigned_agent_id = NULL,
       updated_at = now()
-  WHERE c.account_id = p_account_id
-    AND c.status IN ('open', 'pending')
-    AND (
-      NOT EXISTS (
-        SELECT 1
-        FROM member_presence mp
-        WHERE mp.user_id = c.assigned_agent_id
-          AND mp.account_id = p_account_id
-      )
-      OR EXISTS (
-        SELECT 1
-        FROM member_presence mp
-        WHERE mp.user_id = c.assigned_agent_id
-          AND mp.account_id = p_account_id
-          AND (
-            mp.availability = 'offline'
-            OR mp.last_seen_at < now() - INTERVAL '75 seconds'
-          )
-      )
-    )
-    AND (
-      SELECT max(m.created_at)
-      FROM messages m
-      WHERE m.conversation_id = c.id
-        AND m.sender_type = 'customer'
-    ) IS NOT NULL
-    AND (
-      (
-        SELECT max(m.created_at)
-        FROM messages m
-        WHERE m.conversation_id = c.id
-          AND m.sender_type = 'agent'
-      ) IS NULL
-      OR (
-        SELECT max(m.created_at)
-        FROM messages m
-        WHERE m.conversation_id = c.id
-          AND m.sender_type = 'customer'
-      ) > (
-        SELECT max(m.created_at)
-        FROM messages m
-        WHERE m.conversation_id = c.id
-          AND m.sender_type = 'agent'
-      )
-    );
+  WHERE target.account_id = p_account_id
+    AND target.assigned_agent_id IS NOT NULL
+    AND target.id IN (SELECT id FROM releasable);
 
   -- Claim the oldest queued conversation repeatedly. The row lock is held
   -- until this function returns; SKIP LOCKED lets an independent allocator

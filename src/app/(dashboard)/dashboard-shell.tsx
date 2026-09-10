@@ -7,6 +7,7 @@ import { Sidebar } from "@/components/layout/sidebar";
 import { Header } from "@/components/layout/header";
 import { PresenceHeartbeat } from "@/components/presence/presence-heartbeat";
 import { AvailabilityControl } from '@/components/presence/availability-control';
+import { PresenceProvider } from '@/hooks/use-presence';
 
 // Auth-gated dashboard shell. Extracted from the layout so the layout
 // itself can stay a server component and export metadata (noindex) —
@@ -61,7 +62,9 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
 export function DashboardShell({ children }: { children: React.ReactNode }) {
   return (
     <AuthProvider>
-      <DashboardShellInner>{children}</DashboardShellInner>
+      <PresenceProvider>
+        <DashboardShellInner>{children}</DashboardShellInner>
+      </PresenceProvider>
     </AuthProvider>
   );
 }

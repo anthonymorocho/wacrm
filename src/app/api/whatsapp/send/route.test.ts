@@ -49,7 +49,10 @@ function makeSupabaseMock() {
         case 'conversations':
           // Once created this request, a by-id reload returns it (with
           // its contact); otherwise fall back to the canned existing row.
-          return { data: createdConversation ?? existingConversation, error: null }
+          return {
+            data: createdConversation ?? existingConversation,
+            error: null,
+          };
         case 'whatsapp_config':
           return {
             data: {
@@ -91,7 +94,15 @@ function makeSupabaseMock() {
 
     const b: Record<string, unknown> = {}
     const chain = () => b
-    for (const m of ['select', 'eq', 'in', 'order', 'limit', 'update', 'delete']) {
+    for (const m of [
+      'select',
+      'eq',
+      'in',
+      'order',
+      'limit',
+      'update',
+      'delete',
+    ]) {
       b[m] = vi.fn(chain)
     }
     b.insert = vi.fn((payload: Record<string, unknown>) => {
@@ -228,6 +239,7 @@ describe('POST /api/whatsapp/send — contact_id template path', () => {
       content_type: 'template',
       template_name: 'order_update',
       sender_type: 'agent',
+      sender_id: 'user-1',
     })
   })
 
@@ -243,8 +255,10 @@ describe('POST /api/whatsapp/send — contact_id template path', () => {
     expect(res.status).toBe(200)
 
     expect(conversationInserts).toHaveLength(0)
-    expect(messageInserts[0]).toMatchObject({ conversation_id: 'conv-existing' })
+    expect(messageInserts[0]).toMatchObject({
+      conversation_id: 'conv-existing',
   })
+  });
 
   it('404s when the contact is not in the caller account', async () => {
     contactRow = null

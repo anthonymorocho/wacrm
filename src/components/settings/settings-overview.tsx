@@ -36,8 +36,14 @@ export function SettingsOverview({
 }: {
   onSelect: (section: SettingsSection) => void;
 }) {
-  const { user, profile, accountId, accountRole, defaultCurrency, canManageMembers } =
-    useAuth();
+  const {
+    user,
+    profile,
+    accountId,
+    accountRole,
+    defaultCurrency,
+    canManageMembers,
+  } = useAuth();
   const { mode, theme } = useTheme();
   const t = useTranslations('Settings.overview');
   const tRoles = useTranslations('Settings.roles');
@@ -62,9 +68,17 @@ export function SettingsOverview({
     // Cheap counts — resolve fast, render immediately.
     (async () => {
       setCountsLoading(true);
-      const [membersRes, invitesRes, templatesTotal, templatesPending, tagsRes, fieldsRes] =
-        await Promise.allSettled([
-          fetch('/api/account/members', { cache: 'no-store' }).then((r) => r.json()),
+      const [
+        membersRes,
+        invitesRes,
+        templatesTotal,
+        templatesPending,
+        tagsRes,
+        fieldsRes,
+      ] = await Promise.allSettled([
+        fetch('/api/account/members', { cache: 'no-store' }).then((r) =>
+          r.json()
+        ),
           canManageMembers
             ? fetch('/api/account/invitations', { cache: 'no-store' }).then((r) =>
                 r.json(),
@@ -104,15 +118,18 @@ export function SettingsOverview({
         pendingInvites,
         templates:
           templatesTotal.status === 'fulfilled'
-            ? templatesTotal.value.count ?? null
+            ? (templatesTotal.value.count ?? null)
             : null,
         templatesPending:
           templatesPending.status === 'fulfilled'
-            ? templatesPending.value.count ?? null
+            ? (templatesPending.value.count ?? null)
             : null,
-        tags: tagsRes.status === 'fulfilled' ? tagsRes.value.count ?? null : null,
+        tags:
+          tagsRes.status === 'fulfilled' ? (tagsRes.value.count ?? null) : null,
         customFields:
-          fieldsRes.status === 'fulfilled' ? fieldsRes.value.count ?? null : null,
+          fieldsRes.status === 'fulfilled'
+            ? (fieldsRes.value.count ?? null)
+            : null,
       });
       setCountsLoading(false);
     })();
@@ -186,6 +203,11 @@ export function SettingsOverview({
             }`,
     },
     {
+      section: 'routing',
+      loading: false,
+      subtitle: 'Automatic assignment capacity',
+    },
+    {
       section: 'templates',
       loading: countsLoading,
       subtitle:
@@ -208,9 +230,10 @@ export function SettingsOverview({
       subtitle:
         counts?.tags == null && counts?.customFields == null
           ? t('tagsAndFields')
-          : `${t('tagsCount', { count: counts?.tags ?? 0 })} · ${t('fieldsCount', {
-              count: counts?.customFields ?? 0,
-            })}`,
+          : `${t('tagsCount', { count: counts?.tags ?? 0 })} · ${t(
+              'fieldsCount',
+              { count: counts?.customFields ?? 0 }
+            )}`,
     },
     {
       section: 'appearance',
@@ -227,16 +250,16 @@ export function SettingsOverview({
           {profile?.avatar_url ? (
             <AvatarImage src={profile.avatar_url} alt={displayName} />
           ) : null}
-          <AvatarFallback className="bg-primary/10 text-xl text-primary">
+          <AvatarFallback className="bg-primary/10 text-primary text-xl">
             {initial}
           </AvatarFallback>
         </Avatar>
         <div className="min-w-0 flex-1">
-          <div className="truncate text-base font-semibold text-foreground">
+          <div className="text-foreground truncate text-base font-semibold">
             {displayName}
           </div>
           {profile?.email ? (
-            <div className="truncate text-sm text-muted-foreground">
+            <div className="text-muted-foreground truncate text-sm">
               {profile.email}
             </div>
           ) : null}
@@ -260,18 +283,18 @@ export function SettingsOverview({
               type="button"
               onClick={() => onSelect(section)}
               className={cn(
-                'group flex items-start gap-3.5 rounded-xl border border-border bg-card p-4 text-left transition-colors',
+                'group border-border bg-card flex items-start gap-3.5 rounded-xl border p-4 text-left transition-colors',
                 'hover:border-primary-soft-2 hover:bg-card-2',
               )}
             >
-              <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary-soft text-primary">
+              <span className="bg-primary-soft text-primary flex size-9 shrink-0 items-center justify-center rounded-lg">
                 <Icon className="size-4" />
               </span>
               <span className="min-w-0 flex-1">
-                <span className="block text-sm font-semibold text-foreground">
+                <span className="text-foreground block text-sm font-semibold">
                   {tSections(section)}
                 </span>
-                <span className="mt-0.5 flex items-center gap-1.5 text-xs text-muted-foreground">
+                <span className="text-muted-foreground mt-0.5 flex items-center gap-1.5 text-xs">
                   {loading ? (
                     <>
                       <Loader2 className="size-3 animate-spin" /> {t('loading')}
@@ -281,7 +304,7 @@ export function SettingsOverview({
                   )}
                 </span>
               </span>
-              <ChevronRight className="size-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
+              <ChevronRight className="text-muted-foreground size-4 shrink-0 transition-transform group-hover:translate-x-0.5" />
             </button>
           );
         })}

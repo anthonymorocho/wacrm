@@ -84,6 +84,8 @@ export interface SendMessageParams {
   /** Structured payload for `messageType === 'interactive'`. */
   interactivePayload?: InteractiveMessagePayload | null;
   replyToMessageId?: string | null;
+  /** Authenticated dashboard member who sent this human reply. */
+  senderId?: string | null;
 }
 
 export interface SendMessageResult {
@@ -91,6 +93,45 @@ export interface SendMessageResult {
   messageId: string;
   /** Meta's `wamid` for the delivered message. */
   whatsappMessageId: string;
+}
+
+export interface AgentMessageInsertParams {
+  conversationId: string;
+  senderId?: string | null;
+  messageType: string;
+  contentText?: string | null;
+  mediaUrl?: string | null;
+  templateName?: string | null;
+  interactivePayload?: InteractiveMessagePayload | null;
+  whatsappMessageId: string;
+  replyToMessageId?: string | null;
+}
+
+/** Build the one persisted row for a human dashboard send. */
+export function buildAgentMessageInsert({
+  conversationId,
+  senderId,
+  messageType,
+  contentText,
+  mediaUrl,
+  templateName,
+  interactivePayload,
+  whatsappMessageId,
+  replyToMessageId,
+}: AgentMessageInsertParams): Record<string, unknown> {
+  return {
+    conversation_id: conversationId,
+    sender_type: 'agent',
+    sender_id: senderId ?? null,
+    content_type: messageType,
+    content_text: contentText ?? null,
+    media_url: mediaUrl || null,
+    template_name: templateName || null,
+    interactive_payload: interactivePayload ?? null,
+    message_id: whatsappMessageId,
+    status: 'sent',
+    reply_to_message_id: replyToMessageId || null,
+  };
 }
 
 /**
@@ -115,8 +156,13 @@ export function validateSendMessageParams(params: {
   templateName?: string | null;
   interactivePayload?: InteractiveMessagePayload | null;
 }): void {
-  const { messageType, contentText, mediaUrl, templateName, interactivePayload } =
-    params;
+  const {
+    messageType,
+    contentText,
+    mediaUrl,
+    templateName,
+    interactivePayload,
+  } = params;
 
   if (!messageType) {
     throw new SendMessageError('bad_request', 'message_type is required', 400);
@@ -197,6 +243,7 @@ export async function sendMessageToConversation(
     templateMessageParams,
     interactivePayload,
     replyToMessageId,
+    senderId,
   } = params;
 
   if (!conversationId) {
@@ -450,19 +497,20 @@ export async function sendMessageToConversation(
 
   const { data: messageRecord, error: msgError } = await db
     .from('messages')
-    .insert({
-      conversation_id: conversationId,
-      sender_type: 'agent',
-      content_type: messageType,
-      content_text: interactiveBody ?? contentText ?? null,
-      media_url: mediaUrl || null,
-      template_name: templateName || null,
-      interactive_payload:
-        messageType === 'interactive' ? interactivePayload : null,
-      message_id: waMessageId,
-      status: 'sent',
-      reply_to_message_id: replyToMessageId || null,
-    })
+    .insert(
+      buildAgentMessageInsert({
+        conversationId,
+        senderId,
+        messageType,
+        contentText: interactiveBody ?? contentText ?? null,
+        mediaUrl,
+        templateName,
+        interactivePayload:
+          messageType === 'interactive' ? interactivePayload : null,
+        whatsappMessageId: waMessageId,
+        replyToMessageId,
+      })
+    )
     .select()
     .single();
 

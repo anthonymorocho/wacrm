@@ -83,7 +83,10 @@ export async function POST(request: Request) {
       })
     } catch (err) {
       if (err instanceof SendMessageError) {
-        return NextResponse.json({ error: err.message }, { status: err.status })
+        return NextResponse.json(
+          { error: err.message },
+          { status: err.status }
+        );
       }
       throw err
     }
@@ -165,6 +168,7 @@ export async function POST(request: Request) {
         templateMessageParams: template_message_params,
         interactivePayload: interactive_payload,
         replyToMessageId: reply_to_message_id,
+        senderId: userId,
       })
 
       return NextResponse.json({
@@ -224,7 +228,10 @@ async function findOrCreateConversation(
     .single()
 
   if (error) {
-    console.error('Error creating conversation for contact send:', error.message)
+    console.error(
+      'Error creating conversation for contact send:',
+      error.message
+    );
     return null
   }
 

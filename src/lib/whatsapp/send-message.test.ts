@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 import {
+  buildAgentMessageInsert,
   sendMessageToConversation,
   SendMessageError,
   type SendMessageParams,
@@ -155,5 +156,66 @@ describe('SendMessageError', () => {
     expect(e.code).toBe('meta_error');
     expect(e.status).toBe(502);
     expect(e).toBeInstanceOf(Error);
+  });
+});
+
+describe('buildAgentMessageInsert', () => {
+  it('persists the authenticated sender for every manual message type', () => {
+    const common = {
+      conversationId: 'conv-1',
+      senderId: 'agent-1',
+      whatsappMessageId: 'wamid-1',
+      replyToMessageId: null,
+    };
+
+    expect(
+      buildAgentMessageInsert({
+        ...common,
+        messageType: 'text',
+        contentText: 'Hi',
+      })
+    ).toMatchObject({
+      sender_type: 'agent',
+      sender_id: 'agent-1',
+      content_type: 'text',
+    });
+    expect(
+      buildAgentMessageInsert({
+        ...common,
+        messageType: 'template',
+        templateName: 'hello',
+      })
+    ).toMatchObject({
+      sender_type: 'agent',
+      sender_id: 'agent-1',
+      content_type: 'template',
+    });
+    expect(
+      buildAgentMessageInsert({
+        ...common,
+        messageType: 'image',
+        mediaUrl: 'https://example.com/a.jpg',
+      })
+    ).toMatchObject({
+      sender_type: 'agent',
+      sender_id: 'agent-1',
+      content_type: 'image',
+    });
+    expect(
+      buildAgentMessageInsert({
+        ...common,
+        messageType: 'interactive',
+        contentText: 'Choose',
+        interactivePayload: {
+          kind: 'buttons',
+          body: 'Choose',
+          buttons: [{ id: 'yes', title: 'Yes' }],
+        },
+      })
+    ).toMatchObject({
+      sender_type: 'agent',
+      sender_id: 'agent-1',
+      content_type: 'interactive',
+    });
   });
 });

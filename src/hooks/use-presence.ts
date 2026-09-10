@@ -10,6 +10,7 @@ import {
   type PresenceRow,
   type PresenceStatus,
   type StoredPresence,
+  type AvailabilityStatus,
 } from "@/lib/presence";
 
 // How often the viewer re-derives presence locally. The online→offline
@@ -65,12 +66,16 @@ export function usePresence(enabled = true): UsePresenceResult {
       user_id: string;
       status: StoredPresence;
       last_seen_at: string;
+      availability?: AvailabilityStatus;
+      last_assigned_at?: string | null;
     }) => {
       setRows((prev) => {
         const next = new Map(prev);
         next.set(row.user_id, {
           status: row.status,
           last_seen_at: row.last_seen_at,
+          availability: row.availability ?? 'offline',
+          last_assigned_at: row.last_assigned_at ?? null,
         });
         return next;
       });
@@ -107,6 +112,8 @@ export function usePresence(enabled = true): UsePresenceResult {
               user_id: string;
               status: StoredPresence;
               last_seen_at: string;
+              availability?: AvailabilityStatus;
+              last_assigned_at?: string | null;
             },
           );
         },
@@ -115,7 +122,7 @@ export function usePresence(enabled = true): UsePresenceResult {
 
     supabase
       .from("member_presence")
-      .select("user_id, status, last_seen_at")
+      .select('user_id, status, last_seen_at, availability, last_assigned_at')
       .eq("account_id", accountId)
       .then(({ data, error }) => {
         if (cancelled) return;
@@ -130,13 +137,16 @@ export function usePresence(enabled = true): UsePresenceResult {
             const incoming: PresenceRow = {
               status: r.status as StoredPresence,
               last_seen_at: r.last_seen_at as string,
+              availability:
+                (r.availability as AvailabilityStatus | undefined) ?? 'offline',
+              last_assigned_at: r.last_assigned_at as string | null | undefined,
             };
             const existing = next.get(userId);
             // A live event that arrived first must win over a staler
             // snapshot row.
             if (
               !existing ||
-              new Date(incoming.last_seen_at) >= new Date(existing.last_seen_at)
+              new Date(incoming.last_seen_at) > new Date(existing.last_seen_at)
             ) {
               next.set(userId, incoming);
             }

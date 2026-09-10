@@ -4,15 +4,11 @@ import { useCallback, useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useAuth } from '@/hooks/use-auth'
 import { formatCurrency } from '@/lib/currency'
-import {
-  MessageSquare,
-  UserPlus,
-  DollarSign,
-  Send,
-} from 'lucide-react'
+import { MessageSquare, UserPlus, DollarSign, Send } from 'lucide-react';
 
 import {
   loadActivity,
+  loadAgentWorkload,
   loadConversationsSeries,
   loadMetrics,
   loadPipelineDonut,
@@ -20,6 +16,7 @@ import {
 } from '@/lib/dashboard/queries'
 import type {
   ActivityItem,
+  AgentWorkloadBundle,
   ConversationsSeriesPoint,
   MetricsBundle,
   PipelineDonutData,
@@ -33,6 +30,7 @@ import { ConversationsChart } from '@/components/dashboard/conversations-chart'
 import { PipelineDonut } from '@/components/dashboard/pipeline-donut'
 import { ResponseTimeChart } from '@/components/dashboard/response-time-chart'
 import { ActivityFeed } from '@/components/dashboard/activity-feed'
+import { AgentWorkload } from '@/components/dashboard/agent-workload';
 
 import { useTranslations } from 'next-intl'
 
@@ -40,7 +38,7 @@ type RangeDays = 7 | 30 | 90
 
 export default function DashboardPage() {
   const t = useTranslations('Dashboard.page')
-  const { defaultCurrency } = useAuth()
+  const { accountId, defaultCurrency } = useAuth();
   const [metrics, setMetrics] = useState<MetricsBundle | null>(null)
   const [metricsLoading, setMetricsLoading] = useState(true)
 
@@ -63,9 +61,20 @@ export default function DashboardPage() {
 
   const [activity, setActivity] = useState<ActivityItem[] | null>(null)
   const [activityLoading, setActivityLoading] = useState(true)
+  const [workload, setWorkload] = useState<AgentWorkloadBundle | null>(null);
+  const [workloadLoading, setWorkloadLoading] = useState(true);
 
   const loadAll = useCallback(() => {
     const db = createClient()
+
+    if (accountId) {
+      void loadAgentWorkload(db, accountId)
+        .then((value) => setWorkload(value))
+        .catch((err) =>
+          console.error('[dashboard] agent workload failed:', err)
+        )
+        .finally(() => setWorkloadLoading(false));
+    }
 
     // Kick everything off in parallel. Each block has its own
     // setState + finally so a slow query doesn't hold up faster
@@ -97,11 +106,33 @@ export default function DashboardPage() {
       .then((a) => setActivity(a))
       .catch((err) => console.error('[dashboard] activity failed:', err))
       .finally(() => setActivityLoading(false))
-  }, [])
+  }, [accountId]);
 
   useEffect(() => {
     loadAll()
   }, [loadAll])
+
+  // Workload changes while agents connect or claim chats. Refreshing on tab
+  // focus and visibility keeps this current without polling every chart.
+  useEffect(() => {
+    if (!accountId) return;
+    const refreshWorkload = () => {
+      if (document.visibilityState !== 'visible') return;
+      loadAgentWorkload(createClient(), accountId)
+        .then((value) => setWorkload(value))
+        .catch((err) =>
+          console.error('[dashboard] workload refresh failed:', err)
+        );
+    };
+    window.addEventListener('focus', refreshWorkload);
+    document.addEventListener('visibilitychange', refreshWorkload);
+    const interval = window.setInterval(refreshWorkload, 30_000);
+    return () => {
+      window.removeEventListener('focus', refreshWorkload);
+      document.removeEventListener('visibilitychange', refreshWorkload);
+      window.clearInterval(interval);
+    };
+  }, [accountId]);
 
   // Range switch handler — kept in an event callback (not an effect)
   // so the setState calls stay out of the react-hooks/set-state-in-effect
@@ -125,10 +156,8 @@ export default function DashboardPage() {
     <div className="space-y-5">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold text-foreground">{t('title')}</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          {t('description')}
-        </p>
+        <h1 className="text-foreground text-2xl font-bold">{t('title')}</h1>
+        <p className="text-muted-foreground mt-1 text-sm">{t('description')}</p>
       </div>
 
       {/* Metric cards */}
@@ -191,6 +220,9 @@ export default function DashboardPage() {
       {/* Quick actions */}
       <QuickActions />
 
+      {/* Current team routing snapshot */}
+      <AgentWorkload data={workload} loading={workloadLoading} />
+
       {/* Charts row */}
       {/* items-stretch (the grid default) stretches the two columns to
           match the tallest sibling; adding h-full on each wrapper and
@@ -227,7 +259,11 @@ export default function DashboardPage() {
 
 // ------------------------------------------------------------
 
-function deltaLabel(delta: number, suffix: string, noChangeLabel: string): string {
+function deltaLabel(
+  delta: number,
+  suffix: string,
+  noChangeLabel: string
+): string {
   if (delta === 0) return noChangeLabel
   const sign = delta > 0 ? '+' : ''
   return `${sign}${delta.toLocaleString()} ${suffix}`

@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { derivePresence, type AvailabilityStatus } from '@/lib/presence';
 import {
   daysAgoStart,
   DOW_SHORT_MON_FIRST,
@@ -9,6 +10,8 @@ import {
 } from './date-utils'
 import type {
   ActivityItem,
+  AgentWorkload,
+  AgentWorkloadBundle,
   ConversationsSeriesPoint,
   MetricsBundle,
   PipelineDonutData,
@@ -27,6 +30,121 @@ import type {
 
 type DB = SupabaseClient
 
+interface WorkloadMember {
+  user_id: string;
+  full_name: string | null;
+  account_role: string;
+}
+
+interface WorkloadPresence {
+  user_id: string;
+  status: 'online' | 'away';
+  availability?: AvailabilityStatus | null;
+  last_seen_at: string;
+}
+
+interface WorkloadConversation {
+  assigned_agent_id: string | null;
+  status: 'open' | 'pending' | 'closed';
+}
+
+/**
+ * Pure aggregation for the dashboard workload card. Keeping this separate
+ * from the Supabase query makes zero-load and capacity behavior testable.
+ */
+export function buildAgentWorkload(
+  members: readonly WorkloadMember[],
+  presenceRows: readonly WorkloadPresence[],
+  conversations: readonly WorkloadConversation[],
+  configuredCapacity: number,
+  now: number
+): AgentWorkloadBundle {
+  const capacity = configuredCapacity > 0 ? configuredCapacity : 400;
+  const presence = new Map(presenceRows.map((row) => [row.user_id, row]));
+  const counts = new Map<string, number>();
+  let queueCount = 0;
+
+  for (const conversation of conversations) {
+    if (conversation.status === 'closed') continue;
+    if (!conversation.assigned_agent_id) {
+      queueCount += 1;
+      continue;
+    }
+    counts.set(
+      conversation.assigned_agent_id,
+      (counts.get(conversation.assigned_agent_id) ?? 0) + 1
+    );
+  }
+
+  const agents = members.flatMap((member): AgentWorkload[] => {
+    if (!['owner', 'admin', 'agent'].includes(member.account_role)) return [];
+    const role = member.account_role as AgentWorkload['role'];
+    const row = presence.get(member.user_id);
+    const activeCount = counts.get(member.user_id) ?? 0;
+    return [
+      {
+        userId: member.user_id,
+        name: member.full_name?.trim() || 'Unnamed agent',
+        role,
+        presence: derivePresence(row?.status, row?.last_seen_at, now),
+        availability: row?.availability ?? 'offline',
+        activeCount,
+        capacity,
+        remaining: Math.max(0, capacity - activeCount),
+      },
+    ];
+  });
+
+  return { agents, queueCount };
+}
+
+/** Load the current account's agent workload, including zero-load members. */
+export async function loadAgentWorkload(
+  db: DB,
+  accountId: string,
+  now = Date.now()
+): Promise<AgentWorkloadBundle> {
+  const [membersRes, presenceRes, conversationsRes, accountRes] =
+    await Promise.all([
+      db
+        .from('profiles')
+        .select('user_id, full_name, account_role')
+        .eq('account_id', accountId)
+        .in('account_role', ['owner', 'admin', 'agent'])
+        .order('full_name'),
+      db
+        .from('member_presence')
+        .select('user_id, status, availability, last_seen_at')
+        .eq('account_id', accountId),
+      db
+        .from('conversations')
+        .select('assigned_agent_id, status')
+        .eq('account_id', accountId)
+        .in('status', ['open', 'pending']),
+      db
+        .from('accounts')
+        .select('max_active_conversations_per_agent')
+        .eq('id', accountId)
+        .maybeSingle(),
+    ]);
+
+  const firstError = [
+    membersRes,
+    presenceRes,
+    conversationsRes,
+    accountRes,
+  ].find((result) => result.error)?.error;
+  if (firstError) throw firstError;
+
+  return buildAgentWorkload(
+    (membersRes.data ?? []) as WorkloadMember[],
+    (presenceRes.data ?? []) as WorkloadPresence[],
+    (conversationsRes.data ?? []) as WorkloadConversation[],
+    Number(accountRes.data?.max_active_conversations_per_agent ?? 400),
+    now
+  );
+}
+
 // --- 1. Metric cards ---------------------------------------------------
 
 export async function loadMetrics(db: DB): Promise<MetricsBundle> {
@@ -43,7 +161,10 @@ export async function loadMetrics(db: DB): Promise<MetricsBundle> {
     messagesToday,
     messagesYesterday,
   ] = await Promise.all([
-    db.from('conversations').select('id', { count: 'exact', head: true }).eq('status', 'open'),
+    db
+      .from('conversations')
+      .select('id', { count: 'exact', head: true })
+      .eq('status', 'open'),
     db
       .from('conversations')
       .select('id', { count: 'exact', head: true })
@@ -55,7 +176,10 @@ export async function loadMetrics(db: DB): Promise<MetricsBundle> {
       .eq('status', 'open')
       .gte('created_at', yesterdayStart)
       .lt('created_at', todayStart),
-    db.from('contacts').select('id', { count: 'exact', head: true }).gte('created_at', todayStart),
+    db
+      .from('contacts')
+      .select('id', { count: 'exact', head: true })
+      .gte('created_at', todayStart),
     db
       .from('contacts')
       .select('id', { count: 'exact', head: true })
@@ -76,7 +200,10 @@ export async function loadMetrics(db: DB): Promise<MetricsBundle> {
   ])
 
   const openDealsRows = (openDeals.data ?? []) as { value: number | null }[]
-  const openDealsValue = openDealsRows.reduce((sum, d) => sum + (d.value ?? 0), 0)
+  const openDealsValue = openDealsRows.reduce(
+    (sum, d) => sum + (d.value ?? 0),
+    0
+  );
 
   return {
     activeConversations: {
@@ -117,15 +244,21 @@ export async function loadConversationsSeries(
   const buckets = new Map<string, { incoming: number; outgoing: number }>()
   for (const k of keys) buckets.set(k, { incoming: 0, outgoing: 0 })
 
-  for (const row of (data ?? []) as { created_at: string; sender_type: string }[]) {
+  for (const row of (data ?? []) as {
+    created_at: string;
+    sender_type: string;
+  }[]) {
     const key = localDayKey(row.created_at)
     const bucket = buckets.get(key)
     if (!bucket) continue
     if (row.sender_type === 'customer') bucket.incoming += 1
-    else bucket.outgoing += 1 // agent + bot both count as outgoing
+    else bucket.outgoing += 1; // agent + bot both count as outgoing
   }
 
-  return keys.map((day) => ({ day, ...(buckets.get(day) ?? { incoming: 0, outgoing: 0 }) }))
+  return keys.map((day) => ({
+    day,
+    ...(buckets.get(day) ?? { incoming: 0, outgoing: 0 }),
+  }));
 }
 
 // --- 3. Pipeline donut -------------------------------------------------
@@ -136,9 +269,15 @@ export async function loadPipelineDonut(db: DB): Promise<PipelineDonutData> {
     db.from('deals').select('stage_id, value, status').eq('status', 'open'),
   ])
 
-  const stages =
-    (stagesRes.data ?? []) as { id: string; name: string; color: string }[]
-  const deals = (dealsRes.data ?? []) as { stage_id: string; value: number | null }[]
+  const stages = (stagesRes.data ?? []) as {
+    id: string;
+    name: string;
+    color: string;
+  }[];
+  const deals = (dealsRes.data ?? []) as {
+    stage_id: string;
+    value: number | null;
+  }[];
 
   const byStage = new Map<string, { count: number; total: number }>()
   for (const d of deals) {
@@ -265,7 +404,10 @@ export async function loadResponseTime(db: DB): Promise<ResponseTimeSummary> {
 
 // --- 5. Activity feed --------------------------------------------------
 
-export async function loadActivity(db: DB, limit = 20): Promise<ActivityItem[]> {
+export async function loadActivity(
+  db: DB,
+  limit = 20
+): Promise<ActivityItem[]> {
   // Pull ~10 from each source (plenty of headroom after merge-sort),
   // then interleave by timestamp. The individual per-table limits
   // keep the payload small; the final limit is enforced after sort.
@@ -324,7 +466,12 @@ export async function loadActivity(db: DB, limit = 20): Promise<ActivityItem[]> 
     })
   }
 
-  for (const c of (contacts.data ?? []) as Array<{ id: string; name: string | null; phone: string; created_at: string }>) {
+  for (const c of (contacts.data ?? []) as Array<{
+    id: string;
+    name: string | null;
+    phone: string;
+    created_at: string;
+  }>) {
     items.push({
       id: `contact-${c.id}`,
       kind: 'contact',
@@ -378,7 +525,10 @@ export async function loadActivity(db: DB, limit = 20): Promise<ActivityItem[]> 
     status: string
     created_at: string
     automation: { name: string }[] | { name: string } | null
-    contact: { name: string | null; phone: string }[] | { name: string | null; phone: string } | null
+    contact:
+      | { name: string | null; phone: string }[]
+      | { name: string | null; phone: string }
+      | null;
   }>) {
     const automation = Array.isArray(l.automation) ? l.automation[0] : l.automation
     const contact = Array.isArray(l.contact) ? l.contact[0] : l.contact

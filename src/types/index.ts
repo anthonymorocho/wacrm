@@ -57,6 +57,8 @@ export interface Account {
   name: string;
   /** auth.users.id of the immutable owner. */
   owner_user_id: string;
+  /** Maximum number of open/pending conversations auto-assigned to one member. */
+  max_active_conversations_per_agent?: number;
   created_at: string;
   updated_at: string;
 }
@@ -162,7 +164,7 @@ export interface Conversation {
   user_id: string;
   contact_id: string;
   status: ConversationStatus;
-  assigned_agent_id?: string;
+  assigned_agent_id?: string | null;
   last_message_text?: string;
   last_message_at?: string;
   unread_count: number;
@@ -222,7 +224,7 @@ export interface Message {
   id: string;
   conversation_id: string;
   sender_type: SenderType;
-  sender_id?: string;
+  sender_id?: string | null;
   content_type: ContentType;
   content_text?: string;
   media_url?: string;
@@ -549,10 +551,7 @@ export interface WaitStepConfig {
 }
 
 export type ConditionSubject =
-  | 'contact_field'
-  | 'tag_presence'
-  | 'message_content'
-  | 'time_of_day';
+  'contact_field' | 'tag_presence' | 'message_content' | 'time_of_day';
 
 export interface ConditionStepConfig {
   subject: ConditionSubject;

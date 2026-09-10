@@ -31,10 +31,15 @@ export type StoredPresence = "online" | "away";
 /** What a viewer sees — adds the derived 'offline' state. */
 export type PresenceStatus = "online" | "away" | "offline";
 
+/** Manual routing availability, independent from visual heartbeat presence. */
+export type AvailabilityStatus = 'online' | 'offline';
+
 /** Raw presence row as read from the `member_presence` table. */
 export interface PresenceRow {
   status: StoredPresence;
   last_seen_at: string;
+  availability?: AvailabilityStatus;
+  last_assigned_at?: string | null;
 }
 
 /**

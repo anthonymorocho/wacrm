@@ -15,8 +15,24 @@ export interface MetricsBundle {
   messagesSentToday: MetricDelta
 }
 
+export interface AgentWorkload {
+  userId: string;
+  name: string;
+  role: 'owner' | 'admin' | 'agent';
+  presence: 'online' | 'away' | 'offline';
+  availability: 'online' | 'offline';
+  activeCount: number;
+  capacity: number;
+  remaining: number;
+}
+
+export interface AgentWorkloadBundle {
+  agents: AgentWorkload[];
+  queueCount: number;
+}
+
 export interface ConversationsSeriesPoint {
-  day: string // YYYY-MM-DD local
+  day: string; // YYYY-MM-DD local
   incoming: number
   outgoing: number
 }
@@ -49,11 +65,7 @@ export interface ResponseTimeSummary {
 }
 
 export type ActivityKind =
-  | 'message'
-  | 'deal'
-  | 'broadcast'
-  | 'automation'
-  | 'contact'
+  'message' | 'deal' | 'broadcast' | 'automation' | 'contact';
 
 export interface ActivityItem {
   id: string

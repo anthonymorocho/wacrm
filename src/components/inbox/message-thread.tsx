@@ -51,6 +51,7 @@ import { TemplatePicker } from "./template-picker";
 import { AiThreadBanner } from "./ai-thread-banner";
 import { buildReplyPreview } from "./reply-quote";
 import { toast } from "sonner";
+import { messageAuthorLabel } from '@/lib/inbox/message-authorship';
 
 interface ReplyDraft {
   id: string;
@@ -111,7 +112,10 @@ interface MessageThreadProps {
   onToggleContactPanel?: () => void;
 }
 
-function formatDateSeparator(dateStr: string, t: ReturnType<typeof useTranslations>): string {
+function formatDateSeparator(
+  dateStr: string,
+  t: ReturnType<typeof useTranslations>
+): string {
   const date = new Date(dateStr);
   if (isToday(date)) return t("today");
   if (isYesterday(date)) return t("yesterday");
@@ -135,7 +139,11 @@ function groupMessagesByDate(messages: Message[]) {
   return groups;
 }
 
-const STATUS_OPTIONS: { label: string; value: ConversationStatus; color: string }[] = [
+const STATUS_OPTIONS: {
+  label: string;
+  value: ConversationStatus;
+  color: string;
+}[] = [
   { label: "Open", value: "open", color: "text-primary" },
   { label: "Pending", value: "pending", color: "text-amber-400" },
   { label: "Closed", value: "closed", color: "text-muted-foreground" },
@@ -172,7 +180,7 @@ export function MessageThread({
   const tTimer = useTranslations("Inbox.sessionTimer");
   const tQuote = useTranslations("Inbox.replyQuote");
 
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const { getPresence, getRow, now } = usePresence();
   const [loading, setLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -237,7 +245,10 @@ export function MessageThread({
 
     if (!lastCustomerMsg) return { expired: true, remaining: "No customer messages" };
 
-    const hoursSince = differenceInHours(new Date(), new Date(lastCustomerMsg.created_at));
+    const hoursSince = differenceInHours(
+      new Date(),
+      new Date(lastCustomerMsg.created_at)
+    );
     const expired = hoursSince >= 24;
 
     if (expired) {
@@ -843,14 +854,19 @@ export function MessageThread({
   // pattern under the user's eye.
   if (!conversation || !contact) {
     return (
-      <div className={cn("flex flex-1 flex-col items-center justify-center", DOODLE_BG_CLASSES)}>
-        <div className="flex h-16 w-16 items-center justify-center rounded-full bg-muted">
-          <MessageSquare className="h-8 w-8 text-muted-foreground" />
+      <div
+        className={cn(
+          'flex flex-1 flex-col items-center justify-center',
+          DOODLE_BG_CLASSES
+        )}
+      >
+        <div className="bg-muted flex h-16 w-16 items-center justify-center rounded-full">
+          <MessageSquare className="text-muted-foreground h-8 w-8" />
         </div>
-        <h3 className="mt-4 text-sm font-medium text-muted-foreground">
+        <h3 className="text-muted-foreground mt-4 text-sm font-medium">
           {t("selectConversation")}
         </h3>
-        <p className="mt-1 text-xs text-muted-foreground">
+        <p className="text-muted-foreground mt-1 text-xs">
           {t("selectConversationHint")}
         </p>
       </div>
@@ -864,6 +880,9 @@ export function MessageThread({
   );
   const assignedAgentId = conversation.assigned_agent_id ?? null;
   const currentAssignee = profiles.find((p) => p.user_id === assignedAgentId);
+  const assignableProfiles = profiles.filter((p) =>
+    ['owner', 'admin', 'agent'].includes(p.account_role ?? '')
+  );
   const assignLabel = assignedAgentId
     ? (currentAssignee?.full_name ?? t("assigned"))
     : t("assign");
@@ -880,7 +899,7 @@ export function MessageThread({
     <div className={cn("flex min-w-0 flex-1 flex-col", DOODLE_BG_CLASSES)}>
       {/* Header — solid card surface sits on top of the doodle so the
           name/avatar/dropdowns stay legible. */}
-      <div className="flex items-center justify-between gap-2 border-b border-border bg-card px-3 py-3 sm:px-4">
+      <div className="border-border bg-card flex items-center justify-between gap-2 border-b px-3 py-3 sm:px-4">
         <div className="flex min-w-0 items-center gap-2 sm:gap-3">
           {/* Back-to-list button — mobile only. Hidden on lg+ where the
               conversation list is always visible next to the thread. */}
@@ -889,24 +908,28 @@ export function MessageThread({
               type="button"
               onClick={onBack}
               aria-label={t("backToConversations")}
-              className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground lg:hidden"
+              className="text-muted-foreground hover:bg-muted hover:text-foreground flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-md lg:hidden"
             >
               <ArrowLeft className="h-5 w-5" />
             </button>
           )}
-          <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-muted text-sm font-medium text-foreground">
+          <div className="bg-muted text-foreground flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full text-sm font-medium">
             {displayName.charAt(0).toUpperCase()}
           </div>
           <div className="min-w-0">
-            <h2 className="truncate text-sm font-semibold text-foreground">{displayName}</h2>
-            <p className="truncate text-xs text-muted-foreground">{contact.phone}</p>
+            <h2 className="text-foreground truncate text-sm font-semibold">
+              {displayName}
+            </h2>
+            <p className="text-muted-foreground truncate text-xs">
+              {contact.phone}
+            </p>
           </div>
           {/* Session timer badge — hidden on the narrowest phones so
               the name + back arrow keep their room. */}
           <Badge
             variant="outline"
             className={cn(
-              "ml-1 hidden gap-1 border-border text-[10px] sm:inline-flex sm:ml-2",
+              'border-border ml-1 hidden gap-1 text-[10px] sm:ml-2 sm:inline-flex',
               sessionInfo.expired ? "text-red-400" : "text-primary"
             )}
           >
@@ -931,7 +954,7 @@ export function MessageThread({
               title={contactPanelOpen ? t("hideContact") : t("showContact")}
               aria-pressed={contactPanelOpen}
               className={cn(
-                "hidden h-7 w-7 items-center justify-center rounded-md transition-colors hover:bg-muted hover:text-foreground lg:inline-flex",
+                'hover:bg-muted hover:text-foreground hidden h-7 w-7 items-center justify-center rounded-md transition-colors lg:inline-flex',
                 contactPanelOpen ? "text-primary" : "text-muted-foreground",
               )}
             >
@@ -956,7 +979,7 @@ export function MessageThread({
               aria-label={t("refreshConversation")}
               title={t("refresh")}
               className={cn(
-                "inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-60",
+                'text-muted-foreground hover:bg-muted hover:text-foreground inline-flex h-7 w-7 items-center justify-center rounded-md transition-colors disabled:opacity-60'
               )}
             >
               <RefreshCw
@@ -967,8 +990,9 @@ export function MessageThread({
 
           {/* Status dropdown */}
           <DropdownMenu>
-            <DropdownMenuTrigger className={cn(
-                  "inline-flex items-center justify-center h-7 gap-1 px-2 text-xs rounded-md hover:bg-muted",
+            <DropdownMenuTrigger
+              className={cn(
+                'hover:bg-muted inline-flex h-7 items-center justify-center gap-1 rounded-md px-2 text-xs',
                   currentStatus?.color ?? "text-muted-foreground"
                 )}>
                 {currentStatus ? t(`status${currentStatus.label}`) : t("status")}
@@ -994,7 +1018,7 @@ export function MessageThread({
           <DropdownMenu>
             <DropdownMenuTrigger
               className={cn(
-                "inline-flex items-center justify-center h-7 gap-1 px-2 text-xs rounded-md hover:bg-muted",
+                'hover:bg-muted inline-flex h-7 items-center justify-center gap-1 rounded-md px-2 text-xs',
                 assignedAgentId ? "text-primary" : "text-muted-foreground"
               )}
             >
@@ -1006,12 +1030,15 @@ export function MessageThread({
               align="end"
               className="border-border bg-popover"
             >
-              {profiles.length === 0 ? (
-                <DropdownMenuItem disabled className="text-sm text-muted-foreground">
+              {assignableProfiles.length === 0 ? (
+                <DropdownMenuItem
+                  disabled
+                  className="text-muted-foreground text-sm"
+                >
                   {t("noTeammates")}
                 </DropdownMenuItem>
               ) : (
-                profiles.map((p) => {
+                assignableProfiles.map((p) => {
                   const isSelected = p.user_id === assignedAgentId;
                   const presence = getPresence(p.user_id);
                   return (
@@ -1046,7 +1073,7 @@ export function MessageThread({
                   <DropdownMenuSeparator className="bg-border" />
                   <DropdownMenuItem
                     onClick={() => handleAssignChange(null)}
-                    className="text-sm text-muted-foreground"
+                    className="text-muted-foreground text-sm"
                   >
                     {t("unassign")}
                   </DropdownMenuItem>
@@ -1061,12 +1088,14 @@ export function MessageThread({
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4">
         {loading ? (
           <div className="flex items-center justify-center py-12">
-            <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+            <div className="border-primary h-5 w-5 animate-spin rounded-full border-2 border-t-transparent" />
           </div>
         ) : messages.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-12">
-            <p className="text-sm text-muted-foreground">{t("noMessagesYet")}</p>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-muted-foreground text-sm">
+              {t('noMessagesYet')}
+            </p>
+            <p className="text-muted-foreground text-xs">
               {t("sendTemplateHint")}
             </p>
           </div>
@@ -1076,7 +1105,7 @@ export function MessageThread({
               <div key={group.date}>
                 {/* Date separator */}
                 <div className="mb-4 flex items-center justify-center">
-                  <span className="rounded-full bg-muted px-3 py-1 text-[10px] font-medium text-muted-foreground">
+                  <span className="bg-muted text-muted-foreground rounded-full px-3 py-1 text-[10px] font-medium">
                     {formatDateSeparator(group.date, t)}
                   </span>
                 </div>
@@ -1118,6 +1147,13 @@ export function MessageThread({
                       >
                         <MessageBubble
                           message={msg}
+                          senderLabel={messageAuthorLabel(
+                            msg.sender_type,
+                            msg.sender_id,
+                            profiles,
+                            user?.id,
+                            profile?.full_name
+                          )}
                           reply={reply}
                           reactions={msgReactions}
                           currentUserId={user?.id}

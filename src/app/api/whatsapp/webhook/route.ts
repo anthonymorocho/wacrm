@@ -9,6 +9,7 @@ import { runAutomationsForTrigger } from '@/lib/automations/engine'
 import { dispatchInboundToFlows } from '@/lib/flows/engine'
 import { dispatchInboundToAiReply } from '@/lib/ai/auto-reply'
 import { dispatchWebhookEvent } from '@/lib/webhooks/deliver'
+import { routeAfterInboundMessage } from '@/lib/conversations/route-event';
 import {
   createSupabaseInboundDealRepository,
   ensureInboundDeal,
@@ -45,10 +46,20 @@ interface WhatsAppMessage {
   text?: { body: string }
   image?: { id: string; mime_type: string; caption?: string }
   video?: { id: string; mime_type: string; caption?: string }
-  document?: { id: string; mime_type: string; filename?: string; caption?: string }
+  document?: {
+    id: string;
+    mime_type: string;
+    filename?: string;
+    caption?: string;
+  };
   audio?: { id: string; mime_type: string }
   sticker?: { id: string; mime_type: string }
-  location?: { latitude: number; longitude: number; name?: string; address?: string }
+  location?: {
+    latitude: number;
+    longitude: number;
+    name?: string;
+    address?: string;
+  };
   reaction?: { message_id: string; emoji: string }
   /**
    * Set when the customer taps a button or list row on an interactive
@@ -188,7 +199,10 @@ export async function POST(request: Request) {
 
   if (configError) {
     console.error('[webhook] failed to load Meta App Secrets:', configError)
-    return NextResponse.json({ error: 'Unable to verify webhook' }, { status: 500 })
+    return NextResponse.json(
+      { error: 'Unable to verify webhook' },
+      { status: 500 }
+    );
   }
 
   const secrets = new Set<string>()
@@ -309,8 +323,11 @@ async function processWebhook(body: { entry?: WhatsAppWebhookEntry[] }) {
           phoneNumberId,
           '— inbound message dropped. Resolve duplicates so each number maps to a single account.',
           'Account owners:',
-          configRows.map((r: { account_id: string; user_id: string }) => `${r.account_id} (admin ${r.user_id})`)
+          configRows.map(
+            (r: { account_id: string; user_id: string }) =>
+              `${r.account_id} (admin ${r.user_id})`
         )
+        );
         continue
       }
 
@@ -372,12 +389,12 @@ function isValidStatusTransition(current: string, incoming: string): boolean {
     return current === 'pending' || current === 'sent'
   }
   if (current === 'failed') {
-    return false // failed is terminal
+    return false; // failed is terminal
   }
   const ci = ladderLevel(current)
   const ii = ladderLevel(incoming)
-  if (ii < 0) return false // unknown incoming status
-  if (ci < 0) return true // unknown current — accept anything on the ladder
+  if (ii < 0) return false; // unknown incoming status
+  if (ci < 0) return true; // unknown current — accept anything on the ladder
   return ii > ci
 }
 
@@ -629,10 +646,15 @@ async function processMessage(
   // a reaction still fires the event, and a subscriber always sees the
   // thread open before its first message.received.
   if (convResult.created) {
-    await dispatchWebhookEvent(supabaseAdmin(), accountId, 'conversation.created', {
+    await dispatchWebhookEvent(
+      supabaseAdmin(),
+      accountId,
+      'conversation.created',
+      {
       conversation_id: conversation.id,
       contact_id: contactRecord.id,
-    })
+  }
+    );
   }
 
   // Reactions short-circuit here — they aren't messages. We never insert
@@ -678,14 +700,20 @@ async function processMessage(
   // Map incoming WhatsApp types that aren't in that list to the closest
   // allowed value so the INSERT doesn't fail with a constraint error.
   const ALLOWED_CONTENT_TYPES = new Set([
-    'text', 'image', 'document', 'audio', 'video',
-    'location', 'template', 'interactive',
+    'text',
+    'image',
+    'document',
+    'audio',
+    'video',
+    'location',
+    'template',
+    'interactive',
   ])
   const contentType = ALLOWED_CONTENT_TYPES.has(message.type)
     ? message.type
     : message.type === 'sticker'
       ? 'image'   // stickers are images
-      : 'text'    // reaction, unknown → text fallback
+      : 'text'; // reaction, unknown → text fallback
 
   // Determine whether this is the contact's very first inbound message
   // BEFORE we insert, so the count is accurate. Covers the case where
@@ -733,6 +761,11 @@ async function processMessage(
   if (convError) {
     console.error('Error updating conversation:', convError)
   }
+
+  // The message and conversation are now canonical. Let PostgreSQL release
+  // stale unanswered work and claim the FIFO queue atomically. Routing is
+  // best-effort so a delayed migration cannot make Meta retry the webhook.
+  await routeAfterInboundMessage(supabaseAdmin(), accountId);
 
   // Create one open card for the conversation, or refresh the existing
   // card's activity timestamp. A failed pipeline write must not drop the
@@ -993,7 +1026,11 @@ async function parseMessageContent(
     case 'location':
       if (message.location) {
         const loc = message.location
-        const locationText = [loc.name, loc.address, `${loc.latitude},${loc.longitude}`]
+        const locationText = [
+          loc.name,
+          loc.address,
+          `${loc.latitude},${loc.longitude}`,
+        ]
           .filter(Boolean)
           .join(' - ')
         return { ...empty, contentText: locationText }
@@ -1090,7 +1127,11 @@ async function findOrCreateContact(
     // unique index (migration 022) rejected the duplicate. Re-resolve
     // the existing row instead of dropping the message.
     if (isUniqueViolation(createError)) {
-      const raced = await findExistingContact(supabaseAdmin(), accountId, phone)
+      const raced = await findExistingContact(
+        supabaseAdmin(),
+        accountId,
+        phone
+      );
       if (raced) return { contact: raced, wasCreated: false }
     }
     console.error('Error creating contact:', createError)

@@ -143,7 +143,7 @@
     },
     "conversationList": {
       "searchPlaceholder": "Search conversations...",
-      "filterAll": "All",
+      "filterActive": "Active",
       "filterUnread": "Unread",
       "filterOpen": "Open",
       "filterPending": "Pending",
@@ -154,7 +154,9 @@
       "clearAll": "Clear all",
       "noConversations": "No conversations found",
       "noMessagesYet": "No messages yet",
-      "unknown": "Unknown"
+      "unknown": "Unknown",
+      "assignedTo": "Agent",
+      "inQueue": "Unassigned · In queue"
     },
     "messageThread": {
       "backToConversations": "Back to conversations",

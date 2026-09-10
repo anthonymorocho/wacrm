@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
+  isActiveInboxConversation,
   matchesContactFilters,
   normalizeConversation,
 } from "./conversations";
@@ -96,6 +97,18 @@ describe("matchesContactFilters", () => {
     ).toBe(false);
     expect(
       matchesContactFilters(conv, { tagIds: ["tX"], company: "Acme" }),
+    ).toBe(false);
+  });
+});
+
+describe("isActiveInboxConversation", () => {
+  it("excludes closed conversations from the default Inbox view", () => {
+    expect(isActiveInboxConversation(makeConversation(null))).toBe(true);
+    expect(
+      isActiveInboxConversation({ ...makeConversation(null), status: "pending" }),
+    ).toBe(true);
+    expect(
+      isActiveInboxConversation({ ...makeConversation(null), status: "closed" }),
     ).toBe(false);
   });
 });

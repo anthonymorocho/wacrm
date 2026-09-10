@@ -4,11 +4,12 @@ import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
 import {
   CONVERSATION_SELECT,
+  isActiveInboxConversation,
   matchesContactFilters,
   normalizeConversations,
 } from "@/lib/inbox/conversations";
 import { cn } from "@/lib/utils";
-import type { Conversation, ConversationStatus, Tag } from "@/types";
+import type { Conversation, ConversationStatus, Profile, Tag } from "@/types";
 import { Search, ChevronDown, X } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { useTranslations } from "next-intl";
@@ -44,7 +45,7 @@ const STATUS_COLORS: Record<ConversationStatus, string> = {
 
 
 
-type InboxFilter = ConversationStatus | "all" | "unread";
+type InboxFilter = ConversationStatus | "active" | "unread";
 
 export function ConversationList({
   activeConversationId,
@@ -56,7 +57,7 @@ export function ConversationList({
   const t = useTranslations("Inbox.conversationList");
   
   const FILTER_OPTIONS: { label: string; value: InboxFilter }[] = useMemo(() => [
-    { label: t("filterAll"), value: "all" },
+    { label: t("filterActive"), value: "active" },
     { label: t("filterUnread"), value: "unread" },
     { label: t("filterOpen"), value: "open" },
     { label: t("filterPending"), value: "pending" },
@@ -64,8 +65,9 @@ export function ConversationList({
   ], [t]);
 
   const [search, setSearch] = useState("");
-  const [filter, setFilter] = useState<InboxFilter>("all");
+  const [filter, setFilter] = useState<InboxFilter>("active");
   const [loading, setLoading] = useState(true);
+  const [profiles, setProfiles] = useState<Profile[]>([]);
   // Contact-based filters (issue #272). Tags use OR logic (a conversation
   // matches if its contact carries any selected tag), consistent with
   // Broadcast audience filtering. Company is an exact match on the field.
@@ -143,6 +145,30 @@ export function ConversationList({
   // Company options are derived from the loaded conversations — there's no
   // separate companies table, and only companies with a live conversation
   // are worth offering as an inbox filter.
+  // Profiles are account-scoped by RLS. Loading them once lets each row show
+  // the assignee without adding a query per conversation.
+  useEffect(() => {
+    const supabase = createClient();
+    let cancelled = false;
+
+    supabase
+      .from("profiles")
+      .select("*")
+      .order("full_name")
+      .then(({ data, error }) => {
+        if (cancelled) return;
+        if (error) {
+          console.error("Failed to fetch Inbox assignees:", error);
+          return;
+        }
+        setProfiles((data as Profile[]) ?? []);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const companies = useMemo(() => {
     const set = new Set<string>();
     for (const c of conversations) {
@@ -161,9 +187,13 @@ export function ConversationList({
   const filtered = useMemo(() => {
     let result = conversations;
 
-    if (filter === "unread") {
-      result = result.filter((c) => c.unread_count > 0);
-    } else if (filter !== "all") {
+    if (filter === "active") {
+      result = result.filter(isActiveInboxConversation);
+    } else if (filter === "unread") {
+      result = result.filter(
+        (c) => isActiveInboxConversation(c) && c.unread_count > 0,
+      );
+    } else {
       result = result.filter((c) => c.status === filter);
     }
 
@@ -189,6 +219,12 @@ export function ConversationList({
 
     return result;
   }, [conversations, filter, search, selectedTagIds, selectedCompany]);
+
+  const profilesByUserId = useMemo(() => {
+    const result = new Map<string, Profile>();
+    for (const profile of profiles) result.set(profile.user_id, profile);
+    return result;
+  }, [profiles]);
 
   const toggleTag = useCallback((id: string) => {
     setSelectedTagIds((prev) =>
@@ -239,7 +275,7 @@ export function ConversationList({
         <div className="flex flex-wrap items-center gap-1">
           <DropdownMenu>
             <DropdownMenuTrigger className="inline-flex items-center justify-center h-7 gap-1 px-2 text-xs text-muted-foreground hover:text-foreground rounded-md hover:bg-muted">
-                {activeFilter?.label ?? t("filterAll")}
+                {activeFilter?.label ?? t("filterActive")}
                 <ChevronDown className="h-3 w-3" />
             </DropdownMenuTrigger>
             <DropdownMenuContent
@@ -414,6 +450,11 @@ export function ConversationList({
                 isActive={conv.id === activeConversationId}
                 onSelect={handleSelect}
                 t={t}
+                assignee={
+                  conv.assigned_agent_id
+                    ? profilesByUserId.get(conv.assigned_agent_id)
+                    : undefined
+                }
               />
             ))}
           </div>
@@ -428,6 +469,7 @@ interface ConversationItemProps {
   isActive: boolean;
   onSelect: (conversation: Conversation) => void;
   t: ReturnType<typeof useTranslations>;
+  assignee?: Profile;
 }
 
 function ConversationItem({
@@ -435,6 +477,7 @@ function ConversationItem({
   isActive,
   onSelect,
   t,
+  assignee,
 }: ConversationItemProps) {
   const contact = conversation.contact;
   const displayName = contact?.name || contact?.phone || t("unknown");
@@ -498,6 +541,11 @@ function ConversationItem({
             />
           </div>
         </div>
+        <p className="mt-1 truncate text-[10px] text-muted-foreground/80">
+          {conversation.assigned_agent_id
+            ? `${t("assignedTo")}: ${assignee?.full_name ?? t("unknown")}`
+            : t("inQueue")}
+        </p>
       </div>
     </button>
   );

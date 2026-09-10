@@ -4,6 +4,11 @@
 
 export type RoutingConversationStatus = 'open' | 'pending' | 'closed';
 
+export interface InboundConversationUpdate {
+  status?: 'open';
+  assignedAgentId?: string | null;
+}
+
 export interface RoutingConversation {
   id: string;
   status: RoutingConversationStatus;
@@ -16,6 +21,20 @@ export interface RoutingAgent {
   activeCount: number;
   lastAssignedAt: string | null | undefined;
   available: boolean;
+}
+
+/**
+ * A customer message starts a new work cycle after an agent closed the
+ * conversation. Clear the historical assignee before the allocator runs so
+ * the next eligible online agent can claim it; active conversations retain
+ * their current owner.
+ */
+export function getInboundConversationUpdate(
+  status: RoutingConversationStatus,
+): InboundConversationUpdate {
+  return status === 'closed'
+    ? { status: 'open', assignedAgentId: null }
+    : {};
 }
 
 export function countActiveAssignments(

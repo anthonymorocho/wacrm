@@ -42,6 +42,14 @@ export function normalizeConversations(
   return rows.map(normalizeConversation);
 }
 
+/** Closed conversations stay available through the explicit Closed filter,
+ * but are not part of the active Inbox view. */
+export function isActiveInboxConversation(
+  conversation: Pick<Conversation, "status">,
+): boolean {
+  return conversation.status !== "closed";
+}
+
 export interface ContactFilters {
   /** Tag ids; a conversation matches if its contact has ANY of them (OR). */
   tagIds: string[];

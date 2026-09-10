@@ -10,6 +10,7 @@ import { dispatchInboundToFlows } from '@/lib/flows/engine'
 import { dispatchInboundToAiReply } from '@/lib/ai/auto-reply'
 import { dispatchWebhookEvent } from '@/lib/webhooks/deliver'
 import { routeAfterInboundMessage } from '@/lib/conversations/route-event';
+import { getInboundConversationUpdate } from '@/lib/conversations/routing';
 import {
   createSupabaseInboundDealRepository,
   ensureInboundDeal,
@@ -747,6 +748,10 @@ async function processMessage(
     return
   }
 
+  const inboundConversationUpdate = getInboundConversationUpdate(
+    conversation.status,
+  )
+
   // Update conversation
   const { error: convError } = await supabaseAdmin()
     .from('conversations')
@@ -755,6 +760,12 @@ async function processMessage(
       last_message_at: new Date().toISOString(),
       unread_count: (conversation.unread_count || 0) + 1,
       updated_at: new Date().toISOString(),
+      ...(inboundConversationUpdate.status
+        ? {
+            status: inboundConversationUpdate.status,
+            assigned_agent_id: inboundConversationUpdate.assignedAgentId,
+          }
+        : {}),
     })
     .eq('id', conversation.id)
 

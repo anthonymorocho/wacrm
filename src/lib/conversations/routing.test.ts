@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   countActiveAssignments,
+  getInboundConversationUpdate,
   isCapacityAvailable,
   needsHumanReply,
   selectLeastLoadedAgent,
@@ -108,5 +109,17 @@ describe('conversation routing rules', () => {
       needsHumanReply('2026-01-02T10:00:00Z', '2026-01-02T11:00:00Z')
     ).toBe(false);
     expect(needsHumanReply(null, null)).toBe(false);
+  });
+
+  it('reopens a closed conversation and clears its previous assignment on inbound activity', () => {
+    expect(getInboundConversationUpdate('closed')).toEqual({
+      status: 'open',
+      assignedAgentId: null,
+    });
+  });
+
+  it('does not change an already active conversation on inbound activity', () => {
+    expect(getInboundConversationUpdate('open')).toEqual({});
+    expect(getInboundConversationUpdate('pending')).toEqual({});
   });
 });

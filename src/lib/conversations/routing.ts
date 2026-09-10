@@ -1,5 +1,5 @@
 // Pure conversation-routing rules. Database code owns the concurrent claim;
-// these helpers keep the selection and release invariants explicit and
+// these helpers keep the selection and assignment invariants explicit and
 // independently testable.
 
 export type RoutingConversationStatus = 'open' | 'pending' | 'closed';

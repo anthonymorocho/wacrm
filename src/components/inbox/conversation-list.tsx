@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { useAuth } from "@/hooks/use-auth";
 import {
   CONVERSATION_SELECT,
   isActiveInboxConversation,
@@ -11,10 +12,13 @@ import {
 } from "@/lib/inbox/conversations";
 import { cn } from "@/lib/utils";
 import type { Conversation, ConversationStatus, Profile, Tag } from "@/types";
-import { Search, ChevronDown, X } from "lucide-react";
+import { ArrowRight, Search, ChevronDown, X } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { useTranslations } from "next-intl";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { toast } from "sonner";
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
@@ -23,12 +27,17 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { BulkTransferDialog } from "./bulk-transfer-dialog";
 
 interface ConversationListProps {
   activeConversationId: string | null;
   onSelect: (conversation: Conversation) => void;
   conversations: Conversation[];
   onConversationsLoaded: (conversations: Conversation[]) => void;
+  onBulkAssignChange: (
+    conversationIds: string[],
+    assignedAgentId: string,
+  ) => void;
   /**
    * Increment to force the fetch effect below to refire. The parent
    * bumps this on realtime reconnect / tab visibility → visible so the
@@ -53,9 +62,12 @@ export function ConversationList({
   onSelect,
   conversations,
   onConversationsLoaded,
+  onBulkAssignChange,
   resyncToken = 0,
 }: ConversationListProps) {
   const t = useTranslations("Inbox.conversationList");
+  const tTransfer = useTranslations("Inbox.bulkTransfer");
+  const { user, canSendMessages } = useAuth();
   
   const FILTER_OPTIONS: { label: string; value: InboxFilter }[] = useMemo(() => [
     { label: t("filterActive"), value: "active" },
@@ -70,6 +82,11 @@ export function ConversationList({
   const [filter, setFilter] = useState<InboxFilter>("active");
   const [loading, setLoading] = useState(true);
   const [profiles, setProfiles] = useState<Profile[]>([]);
+  const [selectedConversationIds, setSelectedConversationIds] = useState<
+    string[]
+  >([]);
+  const [transferDialogOpen, setTransferDialogOpen] = useState(false);
+  const [transferring, setTransferring] = useState(false);
   // Contact-based filters (issue #272). Tags use OR logic (a conversation
   // matches if its contact carries any selected tag), consistent with
   // Broadcast audience filtering. Company is an exact match on the field.
@@ -234,6 +251,97 @@ export function ConversationList({
     return result;
   }, [profiles]);
 
+  const selectableConversations = useMemo(
+    () =>
+      filtered.filter(
+        (conversation) =>
+          conversation.status !== "closed" &&
+          conversation.assigned_agent_id === user?.id,
+      ),
+    [filtered, user?.id],
+  );
+
+  const selectableIds = useMemo(
+    () => new Set(selectableConversations.map((conversation) => conversation.id)),
+    [selectableConversations],
+  );
+  const selectedVisibleCount = selectedConversationIds.filter((id) =>
+    selectableIds.has(id),
+  ).length;
+  const allSelectableSelected =
+    selectableConversations.length > 0 &&
+    selectableConversations.every((conversation) =>
+      selectedConversationIds.includes(conversation.id),
+    );
+
+  const toggleConversationSelection = useCallback((conversationId: string) => {
+    setSelectedConversationIds((previous) =>
+      previous.includes(conversationId)
+        ? previous.filter((id) => id !== conversationId)
+        : [...previous, conversationId],
+    );
+  }, []);
+
+  const toggleSelectAll = useCallback(() => {
+    const visibleIds = selectableConversations.map(
+      (conversation) => conversation.id,
+    );
+    setSelectedConversationIds((previous) => {
+      if (visibleIds.every((id) => previous.includes(id))) {
+        return previous.filter((id) => !selectableIds.has(id));
+      }
+      return Array.from(new Set([...previous, ...visibleIds]));
+    });
+  }, [selectableConversations, selectableIds]);
+
+  const handleBulkTransfer = useCallback(
+    async (targetAgentId: string) => {
+      if (transferring || selectedConversationIds.length === 0) return;
+
+      setTransferring(true);
+      try {
+        const response = await fetch("/api/conversations/bulk-transfer", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            conversation_ids: selectedConversationIds,
+            target_agent_id: targetAgentId,
+          }),
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(payload?.error ?? `HTTP ${response.status}`);
+        }
+
+        const transferredIds = Array.isArray(payload?.conversation_ids)
+          ? payload.conversation_ids.filter(
+              (id: unknown): id is string => typeof id === "string",
+            )
+          : [];
+        onBulkAssignChange(transferredIds, targetAgentId);
+        setSelectedConversationIds((previous) =>
+          previous.filter((id) => !transferredIds.includes(id)),
+        );
+        setTransferDialogOpen(false);
+
+        if (transferredIds.length > 0) {
+          toast.success(
+            tTransfer("success", { count: transferredIds.length }),
+          );
+        } else {
+          toast.info(tTransfer("noChanges"));
+        }
+      } catch (error) {
+        toast.error(
+          error instanceof Error ? error.message : tTransfer("error"),
+        );
+      } finally {
+        setTransferring(false);
+      }
+    },
+    [onBulkAssignChange, selectedConversationIds, tTransfer, transferring],
+  );
+
   const toggleTag = useCallback((id: string) => {
     setSelectedTagIds((prev) =>
       prev.includes(id) ? prev.filter((t) => t !== id) : [...prev, id]
@@ -396,6 +504,42 @@ export function ConversationList({
           )}
         </div>
 
+        {canSendMessages && selectableConversations.length > 0 && (
+          <div className="flex items-center gap-2 pt-1">
+            <Checkbox
+              checked={allSelectableSelected}
+              indeterminate={
+                selectedVisibleCount > 0 && !allSelectableSelected
+              }
+              onCheckedChange={toggleSelectAll}
+              aria-label={
+                allSelectableSelected
+                  ? tTransfer("clearSelection")
+                  : tTransfer("selectAll")
+              }
+            />
+            <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
+              {selectedVisibleCount > 0
+                ? tTransfer("selectedCount", {
+                    count: selectedVisibleCount,
+                  })
+                : tTransfer("selectMine")}
+            </span>
+            {selectedConversationIds.length > 0 && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setTransferDialogOpen(true)}
+                className="border-border text-xs text-popover-foreground hover:bg-muted"
+              >
+                <ArrowRight className="h-3.5 w-3.5" />
+                {tTransfer("transfer")}
+              </Button>
+            )}
+          </div>
+        )}
+
         {hasContactFilters && (
           <div className="flex flex-wrap items-center gap-1">
             {selectedTagIds.map((id) => {
@@ -458,6 +602,13 @@ export function ConversationList({
                 isActive={conv.id === activeConversationId}
                 onSelect={handleSelect}
                 t={t}
+                selectable={
+                  canSendMessages &&
+                  conv.status !== "closed" &&
+                  conv.assigned_agent_id === user?.id
+                }
+                selected={selectedConversationIds.includes(conv.id)}
+                onToggleSelect={toggleConversationSelection}
                 assignee={
                   conv.assigned_agent_id
                     ? profilesByUserId.get(conv.assigned_agent_id)
@@ -468,6 +619,17 @@ export function ConversationList({
           </div>
         )}
       </ScrollArea>
+
+      <BulkTransferDialog
+        key={transferDialogOpen ? "open" : "closed"}
+        open={transferDialogOpen}
+        onOpenChange={setTransferDialogOpen}
+        selectedCount={selectedConversationIds.length}
+        profiles={profiles}
+        currentUserId={user?.id}
+        submitting={transferring}
+        onConfirm={(targetAgentId) => void handleBulkTransfer(targetAgentId)}
+      />
     </div>
   );
 }
@@ -477,6 +639,9 @@ interface ConversationItemProps {
   isActive: boolean;
   onSelect: (conversation: Conversation) => void;
   t: ReturnType<typeof useTranslations>;
+  selectable: boolean;
+  selected: boolean;
+  onToggleSelect: (conversationId: string) => void;
   assignee?: Profile;
 }
 
@@ -485,6 +650,9 @@ function ConversationItem({
   isActive,
   onSelect,
   t,
+  selectable,
+  selected,
+  onToggleSelect,
   assignee,
 }: ConversationItemProps) {
   const contact = conversation.contact;
@@ -502,59 +670,73 @@ function ConversationItem({
     : "";
 
   return (
-    <button
-      onClick={handleClick}
+    <div
       className={cn(
-        "flex w-full items-start gap-3 px-3 py-3 text-left transition-colors hover:bg-muted/50",
-        isActive && "border-l-2 border-primary bg-muted/70"
+        "flex w-full items-start gap-2 px-3 py-3 transition-colors hover:bg-muted/50",
+        isActive && "border-l-2 border-primary bg-muted/70",
       )}
     >
-      {/* Avatar */}
-      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted text-sm font-medium text-foreground">
-        {contact?.avatar_url ? (
-          <img
-            src={contact.avatar_url}
-            alt={displayName}
-            className="h-10 w-10 rounded-full object-cover"
-          />
-        ) : (
-          initials
-        )}
-      </div>
+      {selectable && (
+        <Checkbox
+          checked={selected}
+          onCheckedChange={() => onToggleSelect(conversation.id)}
+          aria-label={displayName}
+          className="mt-1.5"
+        />
+      )}
 
-      {/* Content */}
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center justify-between gap-2">
-          <span className="truncate text-sm font-medium text-foreground">
-            {displayName}
-          </span>
-          <span className="shrink-0 text-[10px] text-muted-foreground">{timeAgo}</span>
-        </div>
-        <div className="mt-0.5 flex items-center justify-between gap-2">
-          <p className="truncate text-xs text-muted-foreground">
-            {conversation.last_message_text || t("noMessagesYet")}
-          </p>
-          <div className="flex shrink-0 items-center gap-1.5">
-            {conversation.unread_count > 0 && (
-              <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-bold text-primary-foreground">
-                {conversation.unread_count}
-              </span>
-            )}
-            <span
-              className={cn(
-                "h-2 w-2 rounded-full",
-                STATUS_COLORS[conversation.status]
-              )}
-              title={conversation.status}
+      <button
+        type="button"
+        onClick={handleClick}
+        className="flex min-w-0 flex-1 items-start gap-3 text-left"
+      >
+        {/* Avatar */}
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted text-sm font-medium text-foreground">
+          {contact?.avatar_url ? (
+            <img
+              src={contact.avatar_url}
+              alt={displayName}
+              className="h-10 w-10 rounded-full object-cover"
             />
-          </div>
+          ) : (
+            initials
+          )}
         </div>
-        <p className="mt-1 truncate text-[10px] text-muted-foreground/80">
-          {conversation.assigned_agent_id
-            ? `${t("assignedTo")}: ${assignee?.full_name ?? t("unknown")}`
-            : t("inQueue")}
-        </p>
-      </div>
-    </button>
+
+        {/* Content */}
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center justify-between gap-2">
+            <span className="truncate text-sm font-medium text-foreground">
+              {displayName}
+            </span>
+            <span className="shrink-0 text-[10px] text-muted-foreground">{timeAgo}</span>
+          </div>
+          <div className="mt-0.5 flex items-center justify-between gap-2">
+            <p className="truncate text-xs text-muted-foreground">
+              {conversation.last_message_text || t("noMessagesYet")}
+            </p>
+            <div className="flex shrink-0 items-center gap-1.5">
+              {conversation.unread_count > 0 && (
+                <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-bold text-primary-foreground">
+                  {conversation.unread_count}
+                </span>
+              )}
+              <span
+                className={cn(
+                  "h-2 w-2 rounded-full",
+                  STATUS_COLORS[conversation.status],
+                )}
+                title={conversation.status}
+              />
+            </div>
+          </div>
+          <p className="mt-1 truncate text-[10px] text-muted-foreground/80">
+            {conversation.assigned_agent_id
+              ? `${t("assignedTo")}: ${assignee?.full_name ?? t("unknown")}`
+              : t("inQueue")}
+          </p>
+        </div>
+      </button>
+    </div>
   );
 }

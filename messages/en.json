@@ -159,6 +159,24 @@
       "assignedTo": "Agent",
       "inQueue": "Unassigned · In queue"
     },
+    "bulkTransfer": {
+      "title": "Transfer conversations",
+      "description": "Transfer {count} selected conversations to another agent.",
+      "destination": "Destination agent",
+      "selectAgent": "Select an agent...",
+      "noAgents": "No other agents are available.",
+      "selectMine": "Select my conversations",
+      "selectedCount": "{count} selected",
+      "selectAll": "Select all visible conversations",
+      "clearSelection": "Clear selection",
+      "transfer": "Transfer",
+      "confirm": "Transfer conversations",
+      "cancel": "Cancel",
+      "transferring": "Transferring...",
+      "success": "{count} conversations transferred.",
+      "noChanges": "No conversations were transferred; their assignment may have changed.",
+      "error": "Could not transfer the conversations."
+    },
     "messageThread": {
       "backToConversations": "Back to conversations",
       "hideContactPanel": "Hide contact panel",

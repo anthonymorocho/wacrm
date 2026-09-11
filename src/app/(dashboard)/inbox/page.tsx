@@ -554,6 +554,25 @@ function InboxPageInner() {
     [activeConversation]
   );
 
+  const handleBulkAssignChange = useCallback(
+    (conversationIds: string[], assignedAgentId: string) => {
+      const transferredIds = new Set(conversationIds);
+      setConversations((prev) =>
+        prev.map((c) =>
+          transferredIds.has(c.id)
+            ? { ...c, assigned_agent_id: assignedAgentId }
+            : c,
+        ),
+      );
+      setActiveConversation((prev) =>
+        prev && transferredIds.has(prev.id)
+          ? { ...prev, assigned_agent_id: assignedAgentId }
+          : prev,
+      );
+    },
+    [],
+  );
+
   // On mobile (<lg) we show a SINGLE pane — either the list or the
   // thread — rather than cramming both side-by-side. Selecting a
   // conversation slides the thread in; the thread's back button pops
@@ -589,6 +608,7 @@ function InboxPageInner() {
             onSelect={handleSelectConversation}
             conversations={conversations}
             onConversationsLoaded={handleConversationsLoaded}
+            onBulkAssignChange={handleBulkAssignChange}
             resyncToken={resyncToken}
           />
         </div>

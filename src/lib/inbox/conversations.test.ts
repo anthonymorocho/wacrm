@@ -1,5 +1,8 @@
 import { describe, it, expect } from "vitest";
 import {
+  filterVisibleConversations,
+  getConversationAssignmentKind,
+  isConversationVisibleToUser,
   isActiveInboxConversation,
   isQueuedInboxConversation,
   matchesContactFilters,
@@ -142,6 +145,49 @@ describe("isQueuedInboxConversation", () => {
     expect(
       isQueuedInboxConversation({ ...makeConversation(null), status: "closed" }),
     ).toBe(false);
+  });
+});
+
+describe("conversation visibility", () => {
+  it("lets owners and admins see assigned and queued conversations", () => {
+    const assigned = { ...makeConversation(null), assigned_agent_id: "agent-1" };
+    const queued = makeConversation(null);
+
+    expect(isConversationVisibleToUser(assigned, "owner", "owner-1")).toBe(true);
+    expect(isConversationVisibleToUser(queued, "admin", "admin-1")).toBe(true);
+    expect(filterVisibleConversations([assigned, queued], "admin", "admin-1"))
+      .toHaveLength(2);
+  });
+
+  it("lets an agent see only conversations currently assigned to them", () => {
+    const mine = { ...makeConversation(null), assigned_agent_id: "agent-1" };
+    const theirs = { ...makeConversation(null), id: "c2", assigned_agent_id: "agent-2" };
+    const queued = { ...makeConversation(null), id: "c3" };
+
+    expect(isConversationVisibleToUser(mine, "agent", "agent-1")).toBe(true);
+    expect(isConversationVisibleToUser(theirs, "agent", "agent-1")).toBe(false);
+    expect(isConversationVisibleToUser(queued, "agent", "agent-1")).toBe(false);
+    expect(filterVisibleConversations([mine, theirs, queued], "agent", "agent-1"))
+      .toEqual([mine]);
+  });
+
+  it("does not expose inbox conversations to viewer roles", () => {
+    const mine = { ...makeConversation(null), assigned_agent_id: "agent-1" };
+    expect(isConversationVisibleToUser(mine, "viewer", "viewer-1")).toBe(false);
+    expect(filterVisibleConversations([mine], "viewer", "viewer-1")).toEqual([]);
+  });
+});
+
+describe("conversation assignment kind", () => {
+  it("marks a conversation as transferred permanently after its first transfer", () => {
+    expect(getConversationAssignmentKind({ was_transferred: false })).toBe("owned");
+    expect(getConversationAssignmentKind({ was_transferred: true })).toBe("transferred");
+
+    // Returning to the initial agent does not turn the conversation back into
+    // an owned conversation; the database flag is historical by design.
+    expect(getConversationAssignmentKind({ was_transferred: true })).toBe(
+      "transferred",
+    );
   });
 });
 

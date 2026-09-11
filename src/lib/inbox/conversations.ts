@@ -1,4 +1,5 @@
 import type { Conversation, Contact, Tag } from "@/types";
+import type { AccountRole } from "@/lib/auth/roles";
 
 /**
  * Conversation select that embeds the contact plus its tags, so the Inbox
@@ -95,6 +96,43 @@ export function isQueuedInboxConversation(
   conversation: Pick<Conversation, "status" | "assigned_agent_id">,
 ): boolean {
   return conversation.status !== "closed" && !conversation.assigned_agent_id;
+}
+
+/**
+ * Enforce the inbox's visibility boundary in the client as well as in RLS.
+ * Owners/admins have the operational overview; agents only see their current
+ * assignments; viewers do not participate in the inbox.
+ */
+export function isConversationVisibleToUser(
+  conversation: Pick<Conversation, "assigned_agent_id">,
+  role: AccountRole | null,
+  userId: string | null,
+): boolean {
+  if (role === "owner" || role === "admin") return true;
+  return role === "agent" && Boolean(userId) && conversation.assigned_agent_id === userId;
+}
+
+export function filterVisibleConversations(
+  conversations: Conversation[],
+  role: AccountRole | null,
+  userId: string | null,
+): Conversation[] {
+  return conversations.filter((conversation) =>
+    isConversationVisibleToUser(conversation, role, userId),
+  );
+}
+
+export type ConversationAssignmentKind = "owned" | "transferred";
+
+/**
+ * Assignment history is intentionally sticky. A transferred conversation
+ * remains in the transferred bucket even when it is returned to its initial
+ * agent, so the inbox preserves the hand-off audit signal.
+ */
+export function getConversationAssignmentKind(
+  conversation: Pick<Conversation, "was_transferred">,
+): ConversationAssignmentKind {
+  return conversation.was_transferred ? "transferred" : "owned";
 }
 
 export interface ContactFilters {

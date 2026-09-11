@@ -1,12 +1,12 @@
-"use client";
+'use client';
 
-import { useState, useEffect, useCallback, useRef, useMemo } from "react";
-import { createClient } from "@/lib/supabase/client";
-import { useAuth } from "@/hooks/use-auth";
-import { usePresence } from "@/hooks/use-presence";
-import { PresenceDot } from "@/components/presence/presence-dot";
-import { presenceLabel } from "@/lib/presence";
-import { cn } from "@/lib/utils";
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { createClient } from '@/lib/supabase/client';
+import { useAuth } from '@/hooks/use-auth';
+import { usePresence } from '@/hooks/use-presence';
+import { PresenceDot } from '@/components/presence/presence-dot';
+import { presenceLabel } from '@/lib/presence';
+import { cn } from '@/lib/utils';
 import type {
   Conversation,
   Message,
@@ -16,7 +16,7 @@ import type {
   MessageTemplate,
   Profile,
   InteractiveMessagePayload,
-} from "@/types";
+} from '@/types';
 import {
   MessageSquare,
   ChevronDown,
@@ -27,30 +27,30 @@ import {
   RefreshCw,
   PanelRightOpen,
   PanelRightClose,
-} from "lucide-react";
-import { format, isToday, isYesterday, differenceInHours } from "date-fns";
-import { useTranslations } from "next-intl";
-import { Badge } from "@/components/ui/badge";
+} from 'lucide-react';
+import { format, isToday, isYesterday, differenceInHours } from 'date-fns';
+import { useTranslations } from 'next-intl';
+import { Badge } from '@/components/ui/badge';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { MessageBubble } from "./message-bubble";
-import { MessageActions } from "./message-actions";
+} from '@/components/ui/dropdown-menu';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { MessageBubble } from './message-bubble';
+import { MessageActions } from './message-actions';
 import {
   MessageComposer,
   CHAT_MEDIA_BUCKET,
   type SendMediaPayload,
-} from "./message-composer";
-import { deleteAccountMedia } from "@/lib/storage/upload-media";
-import { TemplatePicker } from "./template-picker";
-import { AiThreadBanner } from "./ai-thread-banner";
-import { buildReplyPreview } from "./reply-quote";
-import { toast } from "sonner";
+} from './message-composer';
+import { deleteAccountMedia } from '@/lib/storage/upload-media';
+import { TemplatePicker } from './template-picker';
+import { AiThreadBanner } from './ai-thread-banner';
+import { buildReplyPreview } from './reply-quote';
+import { toast } from 'sonner';
 import { messageAuthorLabel } from '@/lib/inbox/message-authorship';
 import { renderTemplateBody } from '@/lib/whatsapp/template-message-text';
 
@@ -70,7 +70,7 @@ interface MessageThreadProps {
   onStatusChange: (conversationId: string, status: ConversationStatus) => void;
   onAssignChange: (
     conversationId: string,
-    assignedAgentId: string | null,
+    assignedAgentId: string | null
   ) => void;
   /**
    * On mobile, the thread is shown full-screen with the conversation list
@@ -111,17 +111,17 @@ function formatDateSeparator(
   t: ReturnType<typeof useTranslations>
 ): string {
   const date = new Date(dateStr);
-  if (isToday(date)) return t("today");
-  if (isYesterday(date)) return t("yesterday");
-  return format(date, "MMMM d, yyyy");
+  if (isToday(date)) return t('today');
+  if (isYesterday(date)) return t('yesterday');
+  return format(date, 'MMMM d, yyyy');
 }
 
 function groupMessagesByDate(messages: Message[]) {
   const groups: { date: string; messages: Message[] }[] = [];
-  let currentDate = "";
+  let currentDate = '';
 
   for (const msg of messages) {
-    const day = format(new Date(msg.created_at), "yyyy-MM-dd");
+    const day = format(new Date(msg.created_at), 'yyyy-MM-dd');
     if (day !== currentDate) {
       currentDate = day;
       groups.push({ date: msg.created_at, messages: [msg] });
@@ -138,9 +138,9 @@ const STATUS_OPTIONS: {
   value: ConversationStatus;
   color: string;
 }[] = [
-  { label: "Open", value: "open", color: "text-primary" },
-  { label: "Pending", value: "pending", color: "text-amber-400" },
-  { label: "Closed", value: "closed", color: "text-muted-foreground" },
+  { label: 'Open', value: 'open', color: 'text-primary' },
+  { label: 'Pending', value: 'pending', color: 'text-amber-400' },
+  { label: 'Closed', value: 'closed', color: 'text-muted-foreground' },
 ];
 
 /**
@@ -170,9 +170,9 @@ export function MessageThread({
   contactPanelOpen,
   onToggleContactPanel,
 }: MessageThreadProps) {
-  const t = useTranslations("Inbox.messageThread");
-  const tTimer = useTranslations("Inbox.sessionTimer");
-  const tQuote = useTranslations("Inbox.replyQuote");
+  const t = useTranslations('Inbox.messageThread');
+  const tTimer = useTranslations('Inbox.sessionTimer');
+  const tQuote = useTranslations('Inbox.replyQuote');
 
   const { user, profile } = useAuth();
   const { getPresence, getRow, now } = usePresence();
@@ -212,13 +212,13 @@ export function MessageThread({
     let cancelled = false;
     const supabase = createClient();
     supabase
-      .from("profiles")
-      .select("*")
-      .order("full_name")
+      .from('profiles')
+      .select('*')
+      .order('full_name')
       .then(({ data, error }) => {
         if (cancelled) return;
         if (error) {
-          console.error("Failed to fetch profiles:", error);
+          console.error('Failed to fetch profiles:', error);
           return;
         }
         setProfiles((data as Profile[]) ?? []);
@@ -230,14 +230,15 @@ export function MessageThread({
 
   // 24-hour session timer
   const sessionInfo = useMemo(() => {
-    if (!messages.length) return { expired: false, remaining: "" };
+    if (!messages.length) return { expired: false, remaining: '' };
 
     // Find last customer message
     const lastCustomerMsg = [...messages]
       .reverse()
-      .find((m) => m.sender_type === "customer");
+      .find((m) => m.sender_type === 'customer');
 
-    if (!lastCustomerMsg) return { expired: true, remaining: "No customer messages" };
+    if (!lastCustomerMsg)
+      return { expired: true, remaining: 'No customer messages' };
 
     const hoursSince = differenceInHours(
       new Date(),
@@ -246,14 +247,14 @@ export function MessageThread({
     const expired = hoursSince >= 24;
 
     if (expired) {
-      return { expired: true, remaining: tTimer("expired") };
+      return { expired: true, remaining: tTimer('expired') };
     }
 
     const hoursLeft = 24 - hoursSince;
     const remaining =
       hoursLeft >= 1
-        ? tTimer("xhRemaining", { hours: Math.floor(hoursLeft) })
-        : tTimer("xmRemaining", { minutes: Math.floor(hoursLeft * 60) });
+        ? tTimer('xhRemaining', { hours: Math.floor(hoursLeft) })
+        : tTimer('xmRemaining', { minutes: Math.floor(hoursLeft * 60) });
 
     return { expired, remaining };
   }, [messages, tTimer]);
@@ -287,15 +288,15 @@ export function MessageThread({
       setLoading(true);
 
       const { data, error } = await supabase
-        .from("messages")
-        .select("*")
-        .eq("conversation_id", conversationId)
-        .order("created_at", { ascending: true });
+        .from('messages')
+        .select('*')
+        .eq('conversation_id', conversationId)
+        .order('created_at', { ascending: true });
 
       if (cancelled) return;
 
       if (error) {
-        console.error("Failed to fetch messages:", error);
+        console.error('Failed to fetch messages:', error);
       } else {
         onMessagesLoadedRef.current(data ?? []);
       }
@@ -326,12 +327,12 @@ export function MessageThread({
 
     (async () => {
       const { data, error } = await supabase
-        .from("message_reactions")
-        .select("*")
-        .eq("conversation_id", conversationId);
+        .from('message_reactions')
+        .select('*')
+        .eq('conversation_id', conversationId);
       if (cancelled) return;
       if (error) {
-        console.error("Failed to fetch reactions:", error);
+        console.error('Failed to fetch reactions:', error);
         return;
       }
       setReactions((data as MessageReaction[]) ?? []);
@@ -352,11 +353,11 @@ export function MessageThread({
     const channel = supabase
       .channel(`reactions:${conversationId}`)
       .on(
-        "postgres_changes",
+        'postgres_changes',
         {
-          event: "INSERT",
-          schema: "public",
-          table: "message_reactions",
+          event: 'INSERT',
+          schema: 'public',
+          table: 'message_reactions',
           filter: `conversation_id=eq.${conversationId}`,
         },
         (payload) => {
@@ -367,10 +368,10 @@ export function MessageThread({
             // the pill doesn't double up after a successful POST.
             const tempIdx = prev.findIndex(
               (r) =>
-                r.id.startsWith("temp-") &&
+                r.id.startsWith('temp-') &&
                 r.message_id === row.message_id &&
                 r.actor_type === row.actor_type &&
-                r.actor_id === row.actor_id,
+                r.actor_id === row.actor_id
             );
             if (tempIdx >= 0) {
               const copy = prev.slice();
@@ -379,34 +380,34 @@ export function MessageThread({
             }
             return [...prev, row];
           });
-        },
+        }
       )
       .on(
-        "postgres_changes",
+        'postgres_changes',
         {
-          event: "UPDATE",
-          schema: "public",
-          table: "message_reactions",
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'message_reactions',
           filter: `conversation_id=eq.${conversationId}`,
         },
         (payload) => {
           const row = payload.new as MessageReaction;
           setReactions((prev) => prev.map((r) => (r.id === row.id ? row : r)));
-        },
+        }
       )
       .on(
-        "postgres_changes",
+        'postgres_changes',
         {
-          event: "DELETE",
-          schema: "public",
-          table: "message_reactions",
+          event: 'DELETE',
+          schema: 'public',
+          table: 'message_reactions',
           filter: `conversation_id=eq.${conversationId}`,
         },
         (payload) => {
           const old = payload.old as Partial<MessageReaction>;
           if (!old?.id) return;
           setReactions((prev) => prev.filter((r) => r.id !== old.id));
-        },
+        }
       )
       .subscribe();
 
@@ -434,11 +435,11 @@ export function MessageThread({
     if (!conversationId || !hasUnread) return;
     const supabase = createClient();
     supabase
-      .from("conversations")
+      .from('conversations')
       .update({ unread_count: 0 })
-      .eq("id", conversationId)
+      .eq('id', conversationId)
       .then(({ error }) => {
-        if (error) console.error("Failed to reset unread_count:", error);
+        if (error) console.error('Failed to reset unread_count:', error);
       });
   }, [conversationId, hasUnread]);
 
@@ -460,10 +461,10 @@ export function MessageThread({
       const optimisticMsg: Message = {
         id: tempId,
         conversation_id: conversation.id,
-        sender_type: "agent",
-        content_type: "text",
+        sender_type: 'agent',
+        content_type: 'text',
         content_text: text,
-        status: "sending",
+        status: 'sending',
         created_at: new Date().toISOString(),
         reply_to_message_id: replyToId,
       };
@@ -471,12 +472,12 @@ export function MessageThread({
       setReplyTo(null);
 
       try {
-        const res = await fetch("/api/whatsapp/send", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
+        const res = await fetch('/api/whatsapp/send', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             conversation_id: conversation.id,
-            message_type: "text",
+            message_type: 'text',
             content_text: text,
             reply_to_message_id: replyToId,
           }),
@@ -486,22 +487,22 @@ export function MessageThread({
 
         if (!res.ok) {
           const reason = payload?.error || `HTTP ${res.status}`;
-          console.error("Failed to send message:", reason);
+          console.error('Failed to send message:', reason);
           toast.error(`Failed to send: ${reason}`);
           // Mark the optimistic bubble as failed so the user sees what happened
-          onUpdateMessage(tempId, { status: "failed" });
+          onUpdateMessage(tempId, { status: 'failed' });
           return;
         }
 
         // Success — the realtime INSERT event will replace the temp bubble
         // with the real DB row. If realtime hasn't arrived yet, at least
         // flip status to 'sent' so the UI stops showing "sending".
-        onUpdateMessage(tempId, { status: "sent" });
+        onUpdateMessage(tempId, { status: 'sent' });
       } catch (err) {
-        console.error("Failed to send message:", err);
-        const reason = err instanceof Error ? err.message : "network error";
+        console.error('Failed to send message:', err);
+        const reason = err instanceof Error ? err.message : 'network error';
         toast.error(`Failed to send: ${reason}`);
-        onUpdateMessage(tempId, { status: "failed" });
+        onUpdateMessage(tempId, { status: 'failed' });
       }
     },
     [conversation, onNewMessage, onUpdateMessage]
@@ -515,19 +516,19 @@ export function MessageThread({
       // recipient as the Meta caption when no caption was typed); other
       // kinds use the caption as-is. Audio carries no caption.
       const contentText =
-        payload.kind === "document"
-          ? payload.caption || payload.filename || "Document"
+        payload.kind === 'document'
+          ? payload.caption || payload.filename || 'Document'
           : payload.caption;
 
       const tempId = `temp-${Date.now()}`;
       const optimisticMsg: Message = {
         id: tempId,
         conversation_id: conversation.id,
-        sender_type: "agent",
+        sender_type: 'agent',
         content_type: payload.kind,
         content_text: contentText,
         media_url: payload.mediaUrl,
-        status: "sending",
+        status: 'sending',
         created_at: new Date().toISOString(),
         reply_to_message_id: payload.replyToId,
       };
@@ -535,9 +536,9 @@ export function MessageThread({
       setReplyTo(null);
 
       try {
-        const res = await fetch("/api/whatsapp/send", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
+        const res = await fetch('/api/whatsapp/send', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             conversation_id: conversation.id,
             message_type: payload.kind,
@@ -552,25 +553,33 @@ export function MessageThread({
 
         if (!res.ok) {
           const reason = data?.error || `HTTP ${res.status}`;
-          console.error("Failed to send media:", reason);
+          console.error('Failed to send media:', reason);
           toast.error(`Failed to send: ${reason}`);
-          onUpdateMessage(tempId, { status: "failed" });
+          onUpdateMessage(tempId, { status: 'failed' });
           // The upload never reached the recipient — GC the orphaned
           // object rather than leaving it in the public bucket forever.
-          void deleteAccountMedia(CHAT_MEDIA_BUCKET, payload.path).catch(() => {});
+          if (payload.path) {
+            void deleteAccountMedia(CHAT_MEDIA_BUCKET, payload.path).catch(
+              () => {}
+            );
+          }
           return;
         }
 
-        onUpdateMessage(tempId, { status: "sent" });
+        onUpdateMessage(tempId, { status: 'sent' });
       } catch (err) {
-        console.error("Failed to send media:", err);
-        const reason = err instanceof Error ? err.message : "network error";
+        console.error('Failed to send media:', err);
+        const reason = err instanceof Error ? err.message : 'network error';
         toast.error(`Failed to send: ${reason}`);
-        onUpdateMessage(tempId, { status: "failed" });
-        void deleteAccountMedia(CHAT_MEDIA_BUCKET, payload.path).catch(() => {});
+        onUpdateMessage(tempId, { status: 'failed' });
+        if (payload.path) {
+          void deleteAccountMedia(CHAT_MEDIA_BUCKET, payload.path).catch(
+            () => {}
+          );
+        }
       }
     },
-    [conversation, onNewMessage, onUpdateMessage],
+    [conversation, onNewMessage, onUpdateMessage]
   );
 
   const handleSendInteractive = useCallback(
@@ -583,23 +592,23 @@ export function MessageThread({
       const optimisticMsg: Message = {
         id: tempId,
         conversation_id: conversation.id,
-        sender_type: "agent",
-        content_type: "interactive",
+        sender_type: 'agent',
+        content_type: 'interactive',
         content_text: payload.body,
         interactive_payload: payload,
-        status: "sending",
+        status: 'sending',
         created_at: new Date().toISOString(),
         reply_to_message_id: replyToId,
       };
       onNewMessage(optimisticMsg);
 
       try {
-        const res = await fetch("/api/whatsapp/send", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
+        const res = await fetch('/api/whatsapp/send', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             conversation_id: conversation.id,
-            message_type: "interactive",
+            message_type: 'interactive',
             interactive_payload: payload,
             reply_to_message_id: replyToId,
           }),
@@ -609,21 +618,21 @@ export function MessageThread({
 
         if (!res.ok) {
           const reason = data?.error || `HTTP ${res.status}`;
-          console.error("Failed to send interactive message:", reason);
+          console.error('Failed to send interactive message:', reason);
           toast.error(`Failed to send: ${reason}`);
-          onUpdateMessage(tempId, { status: "failed" });
+          onUpdateMessage(tempId, { status: 'failed' });
           return;
         }
 
-        onUpdateMessage(tempId, { status: "sent" });
+        onUpdateMessage(tempId, { status: 'sent' });
       } catch (err) {
-        console.error("Failed to send interactive message:", err);
-        const reason = err instanceof Error ? err.message : "network error";
+        console.error('Failed to send interactive message:', err);
+        const reason = err instanceof Error ? err.message : 'network error';
         toast.error(`Failed to send: ${reason}`);
-        onUpdateMessage(tempId, { status: "failed" });
+        onUpdateMessage(tempId, { status: 'failed' });
       }
     },
-    [conversation, onNewMessage, onUpdateMessage],
+    [conversation, onNewMessage, onUpdateMessage]
   );
 
   const handleStatusChange = useCallback(
@@ -632,9 +641,9 @@ export function MessageThread({
 
       const supabase = createClient();
       await supabase
-        .from("conversations")
+        .from('conversations')
         .update({ status })
-        .eq("id", conversation.id);
+        .eq('id', conversation.id);
 
       onStatusChange(conversation.id, status);
     },
@@ -652,7 +661,7 @@ export function MessageThread({
         body: string[];
         headerText?: string;
         buttonParams?: Record<number, string>;
-      },
+      }
     ) => {
       if (!conversation) return;
 
@@ -662,22 +671,22 @@ export function MessageThread({
       const optimisticMsg: Message = {
         id: tempId,
         conversation_id: conversation.id,
-        sender_type: "agent",
-        content_type: "template",
+        sender_type: 'agent',
+        content_type: 'template',
         content_text: renderedBody,
         template_name: template.name,
-        status: "sending",
+        status: 'sending',
         created_at: new Date().toISOString(),
       };
       onNewMessage(optimisticMsg);
 
       try {
-        const res = await fetch("/api/whatsapp/send", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
+        const res = await fetch('/api/whatsapp/send', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             conversation_id: conversation.id,
-            message_type: "template",
+            message_type: 'template',
             template_name: template.name,
             template_language: template.language,
             // Structured params drive the new send-builder path
@@ -698,21 +707,21 @@ export function MessageThread({
 
         if (!res.ok) {
           const reason = payload?.error || `HTTP ${res.status}`;
-          console.error("Failed to send template:", reason);
+          console.error('Failed to send template:', reason);
           toast.error(`Failed to send template: ${reason}`);
-          onUpdateMessage(tempId, { status: "failed" });
+          onUpdateMessage(tempId, { status: 'failed' });
           return;
         }
 
-        onUpdateMessage(tempId, { status: "sent" });
+        onUpdateMessage(tempId, { status: 'sent' });
       } catch (err) {
-        console.error("Failed to send template:", err);
-        const reason = err instanceof Error ? err.message : "network error";
+        console.error('Failed to send template:', err);
+        const reason = err instanceof Error ? err.message : 'network error';
         toast.error(`Failed to send template: ${reason}`);
-        onUpdateMessage(tempId, { status: "failed" });
+        onUpdateMessage(tempId, { status: 'failed' });
       }
     },
-    [conversation, onNewMessage, onUpdateMessage],
+    [conversation, onNewMessage, onUpdateMessage]
   );
 
   // Build a quick id → Message map so reply quotes can be rendered without
@@ -734,17 +743,16 @@ export function MessageThread({
     return map;
   }, [reactions]);
 
-  const contactDisplayName = contact?.name || contact?.phone || "Customer";
+  const contactDisplayName = contact?.name || contact?.phone || 'Customer';
 
   // Author label for a quoted message: "You" when we sent the parent,
   // contact name when the customer sent it.
   const authorLabelFor = useCallback(
     (m: Message): string => {
-      const isAgentMsg =
-        m.sender_type === "agent" || m.sender_type === "bot";
-      return isAgentMsg ? "You" : contactDisplayName;
+      const isAgentMsg = m.sender_type === 'agent' || m.sender_type === 'bot';
+      return isAgentMsg ? 'You' : contactDisplayName;
     },
-    [contactDisplayName],
+    [contactDisplayName]
   );
 
   const handleStartReply = useCallback(
@@ -755,7 +763,7 @@ export function MessageThread({
         preview: buildReplyPreview(msg, tQuote),
       });
     },
-    [authorLabelFor],
+    [authorLabelFor]
   );
 
   // Single reaction-set primitive. emoji === "" removes; otherwise adds/swaps.
@@ -765,11 +773,11 @@ export function MessageThread({
   const postReaction = useCallback(
     async (messageId: string, emoji: string) => {
       if (!user?.id || !conversation) {
-        console.warn("[reactions] missing user or conversation");
+        console.warn('[reactions] missing user or conversation');
         return;
       }
-      if (messageId.startsWith("temp-")) {
-        toast.error("Wait for the message to finish sending");
+      if (messageId.startsWith('temp-')) {
+        toast.error('Wait for the message to finish sending');
         return;
       }
 
@@ -784,10 +792,10 @@ export function MessageThread({
         const own = prev.find(
           (r) =>
             r.message_id === messageId &&
-            r.actor_type === "agent" &&
-            r.actor_id === userId,
+            r.actor_type === 'agent' &&
+            r.actor_id === userId
         );
-        if (emoji === "") return own ? prev.filter((r) => r !== own) : prev;
+        if (emoji === '') return own ? prev.filter((r) => r !== own) : prev;
         if (own) return prev.map((r) => (r === own ? { ...own, emoji } : r));
         return [
           ...prev,
@@ -795,7 +803,7 @@ export function MessageThread({
             id: `temp-${Date.now()}`,
             message_id: messageId,
             conversation_id: convId,
-            actor_type: "agent",
+            actor_type: 'agent',
             actor_id: userId,
             emoji,
             created_at: new Date().toISOString(),
@@ -804,9 +812,9 @@ export function MessageThread({
       });
 
       try {
-        const res = await fetch("/api/whatsapp/react", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
+        const res = await fetch('/api/whatsapp/react', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ message_id: messageId, emoji }),
         });
         if (!res.ok) {
@@ -814,12 +822,12 @@ export function MessageThread({
           throw new Error(payload?.error || `HTTP ${res.status}`);
         }
       } catch (err) {
-        const reason = err instanceof Error ? err.message : "network error";
+        const reason = err instanceof Error ? err.message : 'network error';
         toast.error(`Reaction failed: ${reason}`);
         setReactions(snapshot);
       }
     },
-    [conversation, user?.id],
+    [conversation, user?.id]
   );
 
   const handleAssignChange = useCallback(
@@ -828,19 +836,19 @@ export function MessageThread({
 
       const supabase = createClient();
       const { error } = await supabase
-        .from("conversations")
+        .from('conversations')
         .update({ assigned_agent_id: agentId })
-        .eq("id", conversation.id);
+        .eq('id', conversation.id);
 
       if (error) {
-        console.error("Failed to update assignment:", error);
-        toast.error("Failed to update assignment");
+        console.error('Failed to update assignment:', error);
+        toast.error('Failed to update assignment');
         return;
       }
 
       onAssignChange(conversation.id, agentId);
     },
-    [conversation, onAssignChange],
+    [conversation, onAssignChange]
   );
 
   // Empty state — same WhatsApp-style doodle background as the active
@@ -858,10 +866,10 @@ export function MessageThread({
           <MessageSquare className="text-muted-foreground h-8 w-8" />
         </div>
         <h3 className="text-muted-foreground mt-4 text-sm font-medium">
-          {t("selectConversation")}
+          {t('selectConversation')}
         </h3>
         <p className="text-muted-foreground mt-1 text-xs">
-          {t("selectConversationHint")}
+          {t('selectConversationHint')}
         </p>
       </div>
     );
@@ -878,8 +886,8 @@ export function MessageThread({
     ['owner', 'admin', 'agent'].includes(p.account_role ?? '')
   );
   const assignLabel = assignedAgentId
-    ? (currentAssignee?.full_name ?? t("assigned"))
-    : t("assign");
+    ? (currentAssignee?.full_name ?? t('assigned'))
+    : t('assign');
 
   return (
     // `min-w-0` is load-bearing: the page already puts min-w-0 on the
@@ -890,7 +898,7 @@ export function MessageThread({
     // clipped and the hover toolbar overlaps the Tags panel. Letting the
     // root shrink lets the bubbles' break-words / max-w caps apply.
     // Issue #257.
-    <div className={cn("flex min-w-0 flex-1 flex-col", DOODLE_BG_CLASSES)}>
+    <div className={cn('flex min-w-0 flex-1 flex-col', DOODLE_BG_CLASSES)}>
       {/* Header — solid card surface sits on top of the doodle so the
           name/avatar/dropdowns stay legible. */}
       <div className="border-border bg-card flex items-center justify-between gap-2 border-b px-3 py-3 sm:px-4">
@@ -901,7 +909,7 @@ export function MessageThread({
             <button
               type="button"
               onClick={onBack}
-              aria-label={t("backToConversations")}
+              aria-label={t('backToConversations')}
               className="text-muted-foreground hover:bg-muted hover:text-foreground flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-md lg:hidden"
             >
               <ArrowLeft className="h-5 w-5" />
@@ -924,7 +932,7 @@ export function MessageThread({
             variant="outline"
             className={cn(
               'border-border ml-1 hidden gap-1 text-[10px] sm:ml-2 sm:inline-flex',
-              sessionInfo.expired ? "text-red-400" : "text-primary"
+              sessionInfo.expired ? 'text-red-400' : 'text-primary'
             )}
           >
             <Clock className="h-3 w-3" />
@@ -943,13 +951,13 @@ export function MessageThread({
               type="button"
               onClick={onToggleContactPanel}
               aria-label={
-                contactPanelOpen ? t("hideContactPanel") : t("showContactPanel")
+                contactPanelOpen ? t('hideContactPanel') : t('showContactPanel')
               }
-              title={contactPanelOpen ? t("hideContact") : t("showContact")}
+              title={contactPanelOpen ? t('hideContact') : t('showContact')}
               aria-pressed={contactPanelOpen}
               className={cn(
                 'hover:bg-muted hover:text-foreground hidden h-7 w-7 items-center justify-center rounded-md transition-colors lg:inline-flex',
-                contactPanelOpen ? "text-primary" : "text-muted-foreground",
+                contactPanelOpen ? 'text-primary' : 'text-muted-foreground'
               )}
             >
               {contactPanelOpen ? (
@@ -970,14 +978,14 @@ export function MessageThread({
               type="button"
               onClick={handleRefreshClick}
               disabled={isRefreshing}
-              aria-label={t("refreshConversation")}
-              title={t("refresh")}
+              aria-label={t('refreshConversation')}
+              title={t('refresh')}
               className={cn(
                 'text-muted-foreground hover:bg-muted hover:text-foreground inline-flex h-7 w-7 items-center justify-center rounded-md transition-colors disabled:opacity-60'
               )}
             >
               <RefreshCw
-                className={cn("h-3.5 w-3.5", isRefreshing && "animate-spin")}
+                className={cn('h-3.5 w-3.5', isRefreshing && 'animate-spin')}
               />
             </button>
           )}
@@ -987,10 +995,11 @@ export function MessageThread({
             <DropdownMenuTrigger
               className={cn(
                 'hover:bg-muted inline-flex h-7 items-center justify-center gap-1 rounded-md px-2 text-xs',
-                  currentStatus?.color ?? "text-muted-foreground"
-                )}>
-                {currentStatus ? t(`status${currentStatus.label}`) : t("status")}
-                <ChevronDown className="h-3 w-3" />
+                currentStatus?.color ?? 'text-muted-foreground'
+              )}
+            >
+              {currentStatus ? t(`status${currentStatus.label}`) : t('status')}
+              <ChevronDown className="h-3 w-3" />
             </DropdownMenuTrigger>
             <DropdownMenuContent
               align="end"
@@ -1000,7 +1009,7 @@ export function MessageThread({
                 <DropdownMenuItem
                   key={opt.value}
                   onClick={() => handleStatusChange(opt.value)}
-                  className={cn("text-sm", opt.color)}
+                  className={cn('text-sm', opt.color)}
                 >
                   {t(`status${opt.label}`)}
                 </DropdownMenuItem>
@@ -1013,7 +1022,7 @@ export function MessageThread({
             <DropdownMenuTrigger
               className={cn(
                 'hover:bg-muted inline-flex h-7 items-center justify-center gap-1 rounded-md px-2 text-xs',
-                assignedAgentId ? "text-primary" : "text-muted-foreground"
+                assignedAgentId ? 'text-primary' : 'text-muted-foreground'
               )}
             >
               <UserPlus className="h-3 w-3" />
@@ -1029,7 +1038,7 @@ export function MessageThread({
                   disabled
                   className="text-muted-foreground text-sm"
                 >
-                  {t("noTeammates")}
+                  {t('noTeammates')}
                 </DropdownMenuItem>
               ) : (
                 assignableProfiles.map((p) => {
@@ -1040,8 +1049,8 @@ export function MessageThread({
                       key={p.id}
                       onClick={() => handleAssignChange(p.user_id)}
                       className={cn(
-                        "text-sm",
-                        isSelected ? "text-primary" : "text-popover-foreground"
+                        'text-sm',
+                        isSelected ? 'text-primary' : 'text-popover-foreground'
                       )}
                     >
                       <PresenceDot
@@ -1055,7 +1064,7 @@ export function MessageThread({
                       />
                       <span className="flex-1">
                         {p.full_name}
-                        {p.user_id === user?.id ? t("me") : ""}
+                        {p.user_id === user?.id ? t('me') : ''}
                       </span>
                       {isSelected && <Check className="ml-2 h-3 w-3" />}
                     </DropdownMenuItem>
@@ -1069,7 +1078,7 @@ export function MessageThread({
                     onClick={() => handleAssignChange(null)}
                     className="text-muted-foreground text-sm"
                   >
-                    {t("unassign")}
+                    {t('unassign')}
                   </DropdownMenuItem>
                 </>
               )}
@@ -1090,7 +1099,7 @@ export function MessageThread({
               {t('noMessagesYet')}
             </p>
             <p className="text-muted-foreground text-xs">
-              {t("sendTemplateHint")}
+              {t('sendTemplateHint')}
             </p>
           </div>
         ) : (
@@ -1112,9 +1121,10 @@ export function MessageThread({
                     const reply = parent
                       ? {
                           authorLabel:
-                            parent.sender_type === "agent" || parent.sender_type === "bot"
-                              ? t("me") 
-                              : contact?.name || contact?.phone || "Unknown",
+                            parent.sender_type === 'agent' ||
+                            parent.sender_type === 'bot'
+                              ? t('me')
+                              : contact?.name || contact?.phone || 'Unknown',
                           preview: buildReplyPreview(parent, tQuote),
                         }
                       : null;
@@ -1124,10 +1134,9 @@ export function MessageThread({
                     const handlePillToggle = (emoji: string) => {
                       const own = msgReactions?.find(
                         (r) =>
-                          r.actor_type === "agent" &&
-                          r.actor_id === user?.id,
+                          r.actor_type === 'agent' && r.actor_id === user?.id
                       );
-                      const next = own?.emoji === emoji ? "" : emoji;
+                      const next = own?.emoji === emoji ? '' : emoji;
                       void postReaction(msg.id, next);
                     };
                     return (
@@ -1173,7 +1182,7 @@ export function MessageThread({
         assignedAgentId={assignedAgentId}
         currentUserId={user?.id}
         onChange={(patch) => {
-          if ("assigned_agent_id" in patch) {
+          if ('assigned_agent_id' in patch) {
             onAssignChange(conversation.id, patch.assigned_agent_id ?? null);
           }
         }}

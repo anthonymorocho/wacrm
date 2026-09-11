@@ -4,6 +4,7 @@ import { NextResponse } from 'next/server';
 const mocks = vi.hoisted(() => ({
   requireRole: vi.fn(),
   from: vi.fn(),
+  rpc: vi.fn(),
 }));
 
 vi.mock('@/lib/auth/account', () => ({
@@ -53,11 +54,13 @@ describe('/api/conversations/bulk-transfer', () => {
   });
   const supabase = {
     from: mocks.from,
+    rpc: mocks.rpc,
   };
 
   beforeEach(() => {
     mocks.requireRole.mockReset();
     mocks.from.mockReset();
+    mocks.rpc.mockReset();
     mocks.requireRole.mockResolvedValue({
       supabase,
       userId: '44444444-4444-4444-8444-444444444444',
@@ -72,6 +75,10 @@ describe('/api/conversations/bulk-transfer', () => {
     });
     targetQuery.maybeSingle.mockResolvedValue({
       data: { user_id: targetAgent },
+      error: null,
+    });
+    mocks.rpc.mockResolvedValue({
+      data: [{ id: conversationOne }, { id: conversationTwo }],
       error: null,
     });
     updateQuery.then = (
@@ -98,14 +105,10 @@ describe('/api/conversations/bulk-transfer', () => {
     });
     expect(mocks.requireRole).toHaveBeenCalledWith('agent');
     expect(mocks.from).toHaveBeenNthCalledWith(1, 'profiles');
-    expect(mocks.from).toHaveBeenNthCalledWith(2, 'conversations');
-    expect(updateQuery.update).toHaveBeenCalledWith({
-      assigned_agent_id: targetAgent,
+    expect(mocks.rpc).toHaveBeenCalledWith('transfer_conversations', {
+      p_target_agent_id: targetAgent,
+      p_conversation_ids: [conversationOne, conversationTwo],
     });
-    expect(updateQuery.eq).toHaveBeenCalledWith(
-      'assigned_agent_id',
-      '44444444-4444-4444-8444-444444444444',
-    );
   });
 
   it('rejects an empty selection without touching Supabase', async () => {

@@ -5,6 +5,8 @@ import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import {
   CONVERSATION_SELECT,
+  filterVisibleConversations,
+  getConversationAssignmentKind,
   isActiveInboxConversation,
   isQueuedInboxConversation,
   matchesContactFilters,
@@ -62,6 +64,7 @@ const STATUS_COLORS: Record<ConversationStatus, string> = {
 
 
 type InboxFilter = ConversationStatus | "active" | "queue" | "unread";
+type AssignmentFilter = "owned" | "transferred";
 
 export function ConversationList({
   activeConversationId,
@@ -75,19 +78,26 @@ export function ConversationList({
   const t = useTranslations("Inbox.conversationList");
   const tTransfer = useTranslations("Inbox.bulkTransfer");
   const tClose = useTranslations("Inbox.bulkClose");
-  const { user, canSendMessages } = useAuth();
+  const { user, accountRole, canSendMessages } = useAuth();
   
-  const FILTER_OPTIONS: { label: string; value: InboxFilter }[] = useMemo(() => [
-    { label: t("filterActive"), value: "active" },
-    { label: t("filterQueue"), value: "queue" },
-    { label: t("filterUnread"), value: "unread" },
-    { label: t("filterOpen"), value: "open" },
-    { label: t("filterPending"), value: "pending" },
-    { label: t("filterClosed"), value: "closed" },
-  ], [t]);
+  const FILTER_OPTIONS: { label: string; value: InboxFilter }[] = useMemo(() => {
+    const options: { label: string; value: InboxFilter }[] = [
+      { label: t("filterActive"), value: "active" },
+      { label: t("filterUnread"), value: "unread" },
+      { label: t("filterOpen"), value: "open" },
+      { label: t("filterPending"), value: "pending" },
+      { label: t("filterClosed"), value: "closed" },
+    ];
+    if (accountRole !== "agent") {
+      options.splice(1, 0, { label: t("filterQueue"), value: "queue" });
+    }
+    return options;
+  }, [accountRole, t]);
 
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<InboxFilter>("active");
+  const [assignmentFilter, setAssignmentFilter] =
+    useState<AssignmentFilter>("owned");
   const [loading, setLoading] = useState(true);
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [selectedConversationIds, setSelectedConversationIds] = useState<
@@ -214,7 +224,18 @@ export function ConversationList({
   }, [tags]);
 
   const filtered = useMemo(() => {
-    let result = conversations;
+    let result = filterVisibleConversations(
+      conversations,
+      accountRole,
+      user?.id ?? null,
+    );
+
+    if (accountRole === "agent") {
+      result = result.filter(
+        (conversation) =>
+          getConversationAssignmentKind(conversation) === assignmentFilter,
+      );
+    }
 
     if (filter === "active") {
       result = result.filter(isActiveInboxConversation);
@@ -253,7 +274,7 @@ export function ConversationList({
     }
 
     return result;
-  }, [conversations, filter, search, selectedTagIds, selectedCompany]);
+  }, [accountRole, assignmentFilter, conversations, filter, search, selectedTagIds, selectedCompany, user?.id]);
 
   const profilesByUserId = useMemo(() => {
     const result = new Map<string, Profile>();
@@ -278,6 +299,9 @@ export function ConversationList({
   const selectedVisibleCount = selectedConversationIds.filter((id) =>
     selectableIds.has(id),
   ).length;
+  const selectedVisibleIds = selectedConversationIds.filter((id) =>
+    selectableIds.has(id),
+  );
   const allSelectableSelected =
     selectableConversations.length > 0 &&
     selectableConversations.every((conversation) =>
@@ -306,7 +330,7 @@ export function ConversationList({
 
   const handleBulkTransfer = useCallback(
     async (targetAgentId: string) => {
-      if (transferring || selectedConversationIds.length === 0) return;
+      if (transferring || selectedVisibleIds.length === 0) return;
 
       setTransferring(true);
       try {
@@ -314,7 +338,7 @@ export function ConversationList({
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            conversation_ids: selectedConversationIds,
+            conversation_ids: selectedVisibleIds,
             target_agent_id: targetAgentId,
           }),
         });
@@ -349,18 +373,18 @@ export function ConversationList({
         setTransferring(false);
       }
     },
-    [onBulkAssignChange, selectedConversationIds, tTransfer, transferring],
+    [onBulkAssignChange, selectedVisibleIds, tTransfer, transferring],
   );
 
   const handleBulkClose = useCallback(async () => {
-    if (closing || selectedConversationIds.length === 0) return;
+    if (closing || selectedVisibleIds.length === 0) return;
 
     setClosing(true);
     try {
       const response = await fetch("/api/conversations/bulk-close", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ conversation_ids: selectedConversationIds }),
+        body: JSON.stringify({ conversation_ids: selectedVisibleIds }),
       });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) {
@@ -390,7 +414,7 @@ export function ConversationList({
     } finally {
       setClosing(false);
     }
-  }, [closing, onBulkStatusChange, selectedConversationIds, tClose]);
+  }, [closing, onBulkStatusChange, selectedVisibleIds, tClose]);
 
   const toggleTag = useCallback((id: string) => {
     setSelectedTagIds((prev) =>
@@ -437,6 +461,32 @@ export function ConversationList({
             className="border-border bg-muted pl-9 text-sm text-foreground placeholder-muted-foreground focus:border-primary/50"
           />
         </div>
+
+        {accountRole === "agent" && (
+          <div
+            className="flex items-center gap-1 rounded-md bg-muted p-1"
+            role="tablist"
+            aria-label={t("assignmentGroups")}
+          >
+            {(["owned", "transferred"] as const).map((kind) => (
+              <button
+                key={kind}
+                type="button"
+                role="tab"
+                aria-selected={assignmentFilter === kind}
+                onClick={() => setAssignmentFilter(kind)}
+                className={cn(
+                  "flex-1 rounded px-2 py-1 text-xs transition-colors",
+                  assignmentFilter === kind
+                    ? "bg-card font-medium text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                {kind === "owned" ? t("owned") : t("transferred")}
+              </button>
+            ))}
+          </div>
+        )}
 
         <div className="flex flex-wrap items-center gap-1">
           <DropdownMenu>
@@ -575,7 +625,7 @@ export function ConversationList({
                   })
                 : tTransfer("selectMine")}
             </span>
-            {selectedConversationIds.length > 0 && (
+            {selectedVisibleCount > 0 && (
               <>
                 <Button
                   type="button"
@@ -805,6 +855,11 @@ function ConversationItem({
               ? `${t("assignedTo")}: ${assignee?.full_name ?? t("unknown")}`
               : t("inQueue")}
           </p>
+          {conversation.was_transferred && (
+            <span className="mt-1 inline-flex rounded-full bg-amber-500/10 px-1.5 py-0.5 text-[10px] text-amber-600 dark:text-amber-400">
+              {t("transferred")}
+            </span>
+          )}
         </div>
       </button>
     </div>

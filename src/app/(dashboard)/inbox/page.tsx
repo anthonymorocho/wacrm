@@ -1,25 +1,33 @@
-"use client";
+'use client';
 
-import { Suspense, useState, useCallback, useEffect, useRef } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
-import { useTranslations } from "next-intl";
-import { createClient } from "@/lib/supabase/client";
+import { Suspense, useState, useCallback, useEffect, useRef } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { useTranslations } from 'next-intl';
+import { createClient } from '@/lib/supabase/client';
 import {
   CONVERSATION_SELECT,
+  filterVisibleConversations,
+  isConversationVisibleToUser,
   normalizeConversation,
   updateConversationActivity,
-} from "@/lib/inbox/conversations";
-import type { Conversation, Message, Contact, ConversationStatus } from "@/types";
-import { useRealtime } from "@/hooks/use-realtime";
-import { ConversationList } from "@/components/inbox/conversation-list";
-import { MessageThread } from "@/components/inbox/message-thread";
-import { ContactSidebar } from "@/components/inbox/contact-sidebar";
-import { WifiOff } from "lucide-react";
-import { cn } from "@/lib/utils";
+} from '@/lib/inbox/conversations';
+import type {
+  Conversation,
+  Message,
+  Contact,
+  ConversationStatus,
+} from '@/types';
+import { useRealtime } from '@/hooks/use-realtime';
+import { ConversationList } from '@/components/inbox/conversation-list';
+import { MessageThread } from '@/components/inbox/message-thread';
+import { ContactSidebar } from '@/components/inbox/contact-sidebar';
+import { WifiOff } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import { useAuth } from '@/hooks/use-auth';
 
 // Remembers the agent's show/hide choice for the desktop contact panel
 // across reloads and sessions (device-scoped, like the theme prefs).
-const CONTACT_PANEL_STORAGE_KEY = "wacrm:inbox:contact-panel-open";
+const CONTACT_PANEL_STORAGE_KEY = 'wacrm:inbox:contact-panel-open';
 
 // `useSearchParams` (the `?c=<id>` deep link below) requires a Suspense
 // boundary or the production build bails to CSR and errors out. Thin
@@ -33,15 +41,16 @@ export default function InboxPage() {
 }
 
 function InboxPageInner() {
-  const t = useTranslations("Inbox.page");
+  const t = useTranslations('Inbox.page');
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { user, accountRole } = useAuth();
   /**
    * `?c=<id>` deep-link support. Used when landing here from the
    * dashboard's recent-conversations list so the right thread opens
    * automatically instead of showing the empty center panel.
    */
-  const deepLinkConvId = searchParams.get("c");
+  const deepLinkConvId = searchParams.get('c');
 
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [activeConversation, setActiveConversation] =
@@ -72,7 +81,7 @@ function InboxPageInner() {
   useEffect(() => {
     try {
       const stored = localStorage.getItem(CONTACT_PANEL_STORAGE_KEY);
-      if (stored !== null) setContactPanelOpen(stored === "true");
+      if (stored !== null) setContactPanelOpen(stored === 'true');
     } catch {
       // localStorage can throw in private-browsing / sandboxed contexts.
     }
@@ -134,14 +143,14 @@ function InboxPageInner() {
     try {
       const supabase = createClient();
       const { data, error } = await supabase
-        .from("conversations")
+        .from('conversations')
         .select(CONVERSATION_SELECT)
-        .eq("id", convId)
+        .eq('id', convId)
         .maybeSingle();
       if (error) {
         // Supabase errors have non-enumerable properties — log fields
         // explicitly so the console message isn't just `{}`.
-        console.error("Failed to hydrate conversation:", {
+        console.error('Failed to hydrate conversation:', {
           message: error.message,
           details: error.details,
           hint: error.hint,
@@ -151,6 +160,15 @@ function InboxPageInner() {
       }
       if (!data) return;
       const fetched = normalizeConversation(data);
+      // RLS is the trust boundary; this client-side check keeps a stale
+      // realtime/hydration callback from reintroducing a row after a role or
+      // assignment change.
+      if (
+        !accountRole ||
+        !isConversationVisibleToUser(fetched, accountRole, user?.id ?? null)
+      ) {
+        return;
+      }
       setConversations((prev) => {
         const existing = prev.find((c) => c.id === fetched.id);
         if (existing) {
@@ -162,7 +180,7 @@ function InboxPageInner() {
           return prev.map((c) =>
             c.id === fetched.id
               ? { ...c, contact: c.contact ?? fetched.contact }
-              : c,
+              : c
           );
         }
         return [fetched, ...prev];
@@ -170,7 +188,7 @@ function InboxPageInner() {
     } finally {
       hydratingConvIdsRef.current.delete(convId);
     }
-  }, []);
+  }, [accountRole, user?.id]);
 
   // Check WhatsApp connection status on mount
   useEffect(() => {
@@ -190,9 +208,9 @@ function InboxPageInner() {
       // shared inbox even though the admin had it configured.
       // Resolve account_id via the profile and query by that.
       const { data: profile } = await supabase
-        .from("profiles")
-        .select("account_id")
-        .eq("user_id", user.id)
+        .from('profiles')
+        .select('account_id')
+        .eq('user_id', user.id)
         .maybeSingle();
       const accountId = profile?.account_id as string | undefined;
       if (!accountId) {
@@ -201,12 +219,12 @@ function InboxPageInner() {
       }
 
       const { data } = await supabase
-        .from("whatsapp_config")
-        .select("status")
-        .eq("account_id", accountId)
+        .from('whatsapp_config')
+        .select('status')
+        .eq('account_id', accountId)
         .maybeSingle();
 
-      setWhatsappConnected(data?.status === "connected");
+      setWhatsappConnected(data?.status === 'connected');
     };
 
     checkConnection();
@@ -217,7 +235,7 @@ function InboxPageInner() {
     (event: { eventType: string; new: Message; old: Partial<Message> }) => {
       const newMsg = event.new;
 
-      if (event.eventType === "INSERT") {
+      if (event.eventType === 'INSERT') {
         // Add to messages if it belongs to active conversation
         if (
           activeConversation &&
@@ -228,7 +246,7 @@ function InboxPageInner() {
             if (prev.some((m) => m.id === newMsg.id)) return prev;
             // Replace optimistic message if it exists
             const withoutOptimistic = prev.filter(
-              (m) => !m.id.startsWith("temp-")
+              (m) => !m.id.startsWith('temp-')
             );
             return [...withoutOptimistic, newMsg];
           });
@@ -242,7 +260,7 @@ function InboxPageInner() {
         if (knownConvIdsRef.current.has(newMsg.conversation_id)) {
           setConversations((prev) => {
             const current = prev.find(
-              (conversation) => conversation.id === newMsg.conversation_id,
+              (conversation) => conversation.id === newMsg.conversation_id
             );
             if (!current) return prev;
 
@@ -251,12 +269,12 @@ function InboxPageInner() {
               newMsg.conversation_id,
               newMsg.created_at,
               {
-                last_message_text: newMsg.content_text ?? "",
+                last_message_text: newMsg.content_text ?? '',
                 unread_count:
                   activeConversation?.id === newMsg.conversation_id
                     ? 0
                     : current.unread_count + 1,
-              },
+              }
             );
           });
         } else {
@@ -269,7 +287,7 @@ function InboxPageInner() {
         }
       }
 
-      if (event.eventType === "UPDATE") {
+      if (event.eventType === 'UPDATE') {
         // Update message status
         setMessages((prev) =>
           prev.map((m) => (m.id === newMsg.id ? { ...m, ...newMsg } : m))
@@ -288,7 +306,36 @@ function InboxPageInner() {
     }) => {
       const conv = event.new;
 
-      if (event.eventType === "INSERT") {
+      if (event.eventType === 'DELETE') {
+        const deletedId = event.old.id ?? conv?.id;
+        if (!deletedId) return;
+        setConversations((prev) => prev.filter((item) => item.id !== deletedId));
+        if (activeConversation?.id === deletedId) {
+          setActiveConversation(null);
+          setActiveContact(null);
+          setMessages([]);
+          router.replace('/inbox', { scroll: false });
+        }
+        return;
+      }
+
+      if (
+        !accountRole ||
+        !isConversationVisibleToUser(conv, accountRole, user?.id ?? null)
+      ) {
+        // An agent loses visibility as soon as a conversation is transferred
+        // away or released. Remove it immediately, including an open thread.
+        setConversations((prev) => prev.filter((item) => item.id !== conv.id));
+        if (activeConversation?.id === conv.id) {
+          setActiveConversation(null);
+          setActiveContact(null);
+          setMessages([]);
+          router.replace('/inbox', { scroll: false });
+        }
+        return;
+      }
+
+      if (event.eventType === 'INSERT') {
         // Prepend immediately for snappy UX so the new conv shows in the
         // list right away, then hydrate to fill in the `contact` join
         // (realtime payloads never include joins). Skip both if we
@@ -303,7 +350,7 @@ function InboxPageInner() {
         }
       }
 
-      if (event.eventType === "UPDATE") {
+      if (event.eventType === 'UPDATE') {
         if (knownConvIdsRef.current.has(conv.id)) {
           // If this UPDATE is for the conv the user is currently viewing,
           // suppress the incoming unread_count — the user is reading it
@@ -312,7 +359,9 @@ function InboxPageInner() {
           // UPDATE to round-trip. Non-active convs take the value as-is.
           const isActive = activeConversation?.id === conv.id;
           setConversations((prev) => {
-            const current = prev.find((conversation) => conversation.id === conv.id);
+            const current = prev.find(
+              (conversation) => conversation.id === conv.id
+            );
             if (!current) return prev;
 
             const incomingActivityAt = conv.last_message_at;
@@ -326,7 +375,8 @@ function InboxPageInner() {
               Boolean(incomingActivityAt) &&
               (!current.last_message_at ||
                 (Number.isFinite(incomingTime) &&
-                  (!Number.isFinite(currentTime) || incomingTime > currentTime)));
+                  (!Number.isFinite(currentTime) ||
+                    incomingTime > currentTime)));
 
             const merged = prev.map((conversation) =>
               conversation.id === conv.id
@@ -344,7 +394,7 @@ function InboxPageInner() {
                         }),
                     unread_count: isActive ? 0 : conv.unread_count,
                   }
-                : conversation,
+                : conversation
             );
 
             return hasNewerActivity && incomingActivityAt
@@ -361,13 +411,11 @@ function InboxPageInner() {
 
         // Update active conversation if it changed
         if (activeConversation && conv.id === activeConversation.id) {
-          setActiveConversation((prev) =>
-            prev ? { ...prev, ...conv } : prev
-          );
+          setActiveConversation((prev) => (prev ? { ...prev, ...conv } : prev));
         }
       }
     },
-    [activeConversation, hydrateConversation]
+    [accountRole, activeConversation, hydrateConversation, router, user?.id]
   );
 
   // Subscribe to realtime. The `isConnected` flag below feeds the
@@ -375,7 +423,7 @@ function InboxPageInner() {
   // WS was disconnected (laptop sleep, network blip, background-tab
   // throttle) are simply lost. We need a way to catch up.
   const { isConnected } = useRealtime({
-    channelName: "inbox-realtime",
+    channelName: 'inbox-realtime',
     onMessageEvent: handleMessageEvent,
     onConversationEvent: handleConversationEvent,
     enabled: true,
@@ -413,13 +461,13 @@ function InboxPageInner() {
    */
   useEffect(() => {
     const onVisibility = () => {
-      if (document.visibilityState === "visible") {
+      if (document.visibilityState === 'visible') {
         setResyncToken((n) => n + 1);
       }
     };
-    document.addEventListener("visibilitychange", onVisibility);
+    document.addEventListener('visibilitychange', onVisibility);
     return () => {
-      document.removeEventListener("visibilitychange", onVisibility);
+      document.removeEventListener('visibilitychange', onVisibility);
     };
   }, []);
 
@@ -436,6 +484,9 @@ function InboxPageInner() {
   const handleConversationsLoaded = useCallback(
     (loaded: Conversation[]) => {
       setConversations(loaded);
+      const visibleLoaded = accountRole
+        ? filterVisibleConversations(loaded, accountRole, user?.id ?? null)
+        : [];
       // Resolve a pending deep-link here rather than in an effect — this
       // is an event handler, so the setState calls below are allowed by
       // react-hooks/set-state-in-effect. Runs once per ?c=<id> URL value
@@ -444,7 +495,7 @@ function InboxPageInner() {
       if (
         deepLinkConvId &&
         autoSelectedForDeepLinkRef.current !== deepLinkConvId &&
-        loaded.length > 0
+        visibleLoaded.length > 0
       ) {
         autoSelectedForDeepLinkRef.current = deepLinkConvId;
         // If the deep-linked conversation is already the active one
@@ -457,7 +508,7 @@ function InboxPageInner() {
         // refetch. The thread would read "No messages yet" until a
         // full page reload rehydrated state from scratch.
         if (activeConversation?.id === deepLinkConvId) return;
-        const match = loaded.find((c) => c.id === deepLinkConvId);
+        const match = visibleLoaded.find((c) => c.id === deepLinkConvId);
         if (match) {
           setActiveConversation(match);
           setActiveContact(match.contact ?? null);
@@ -469,18 +520,24 @@ function InboxPageInner() {
           if (match.unread_count > 0) {
             setConversations((prev) =>
               prev.map((c) =>
-                c.id === match.id ? { ...c, unread_count: 0 } : c,
-              ),
+                c.id === match.id ? { ...c, unread_count: 0 } : c
+              )
             );
           }
         }
       }
     },
-    [deepLinkConvId, activeConversation?.id]
+    [accountRole, deepLinkConvId, activeConversation?.id, user?.id]
   );
 
   const handleSelectConversation = useCallback(
     (conv: Conversation) => {
+      if (
+        !accountRole ||
+        !isConversationVisibleToUser(conv, accountRole, user?.id ?? null)
+      ) {
+        return;
+      }
       // Re-clicking the already-active conversation would clear the
       // messages array, but the fetch effect in MessageThread only re-runs
       // when conversationId changes — so messages would stay empty until
@@ -500,10 +557,8 @@ function InboxPageInner() {
       // even if the realtime UPDATE is dropped.
       setConversations((prev) =>
         prev.map((c) =>
-          c.id === conv.id && c.unread_count > 0
-            ? { ...c, unread_count: 0 }
-            : c,
-        ),
+          c.id === conv.id && c.unread_count > 0 ? { ...c, unread_count: 0 } : c
+        )
       );
       // Record the selection on the deep-link ref BEFORE we change the
       // URL. The router.replace below flips `deepLinkConvId`, which can
@@ -518,7 +573,7 @@ function InboxPageInner() {
       // replace() to avoid polluting browser history with every click.
       router.replace(`/inbox?c=${conv.id}`, { scroll: false });
     },
-    [activeConversation?.id, router]
+    [accountRole, activeConversation?.id, router, user?.id]
   );
 
   // Mobile "back" — deselect the conversation so the list pane comes
@@ -531,9 +586,8 @@ function InboxPageInner() {
     // Clearing the ref lets the deep-link auto-selector fire again if
     // the user later visits /inbox?c=<same-id> — desirable UX.
     autoSelectedForDeepLinkRef.current = null;
-    router.replace("/inbox", { scroll: false });
+    router.replace('/inbox', { scroll: false });
   }, [router]);
-
 
   const handleMessagesLoaded = useCallback((loaded: Message[]) => {
     setMessages(loaded);
@@ -569,41 +623,80 @@ function InboxPageInner() {
 
   const handleAssignChange = useCallback(
     (conversationId: string, assignedAgentId: string | null) => {
+      const nextAssignment = assignedAgentId ?? undefined;
       setConversations((prev) =>
-        prev.map((c) =>
-          c.id === conversationId
-            ? { ...c, assigned_agent_id: assignedAgentId ?? undefined }
-            : c
-        )
+        prev.flatMap((c) => {
+          if (c.id !== conversationId) return [c];
+          const next = { ...c, assigned_agent_id: nextAssignment };
+          return accountRole &&
+            isConversationVisibleToUser(next, accountRole, user?.id ?? null)
+            ? [next]
+            : [];
+        })
       );
       if (activeConversation?.id === conversationId) {
-        setActiveConversation((prev) =>
-          prev
-            ? { ...prev, assigned_agent_id: assignedAgentId ?? undefined }
-            : prev
-        );
+        const stillVisible =
+          accountRole &&
+          isConversationVisibleToUser(
+            { assigned_agent_id: nextAssignment },
+            accountRole,
+            user?.id ?? null,
+          );
+        if (stillVisible) {
+          setActiveConversation((prev) =>
+            prev ? { ...prev, assigned_agent_id: nextAssignment } : prev,
+          );
+        } else {
+          setActiveConversation(null);
+          setActiveContact(null);
+          setMessages([]);
+          router.replace('/inbox', { scroll: false });
+        }
       }
     },
-    [activeConversation]
+    [accountRole, activeConversation, router, user?.id]
   );
 
   const handleBulkAssignChange = useCallback(
     (conversationIds: string[], assignedAgentId: string) => {
       const transferredIds = new Set(conversationIds);
       setConversations((prev) =>
-        prev.map((c) =>
-          transferredIds.has(c.id)
-            ? { ...c, assigned_agent_id: assignedAgentId }
-            : c,
-        ),
+        prev.flatMap((c) => {
+          if (!transferredIds.has(c.id)) return [c];
+          const next = { ...c, assigned_agent_id: assignedAgentId };
+          return accountRole &&
+            isConversationVisibleToUser(next, accountRole, user?.id ?? null)
+            ? [next]
+            : [];
+        })
       );
-      setActiveConversation((prev) =>
-        prev && transferredIds.has(prev.id)
-          ? { ...prev, assigned_agent_id: assignedAgentId }
-          : prev,
-      );
+      setActiveConversation((prev) => {
+        if (!prev || !transferredIds.has(prev.id)) return prev;
+        const stillVisible =
+          accountRole &&
+          isConversationVisibleToUser(
+            { assigned_agent_id: assignedAgentId },
+            accountRole,
+            user?.id ?? null,
+          );
+        return stillVisible ? { ...prev, assigned_agent_id: assignedAgentId } : null;
+      });
+      if (
+        activeConversation &&
+        transferredIds.has(activeConversation.id) &&
+        (!accountRole ||
+          !isConversationVisibleToUser(
+            { assigned_agent_id: assignedAgentId },
+            accountRole,
+            user?.id ?? null,
+          ))
+      ) {
+        setActiveContact(null);
+        setMessages([]);
+        router.replace('/inbox', { scroll: false });
+      }
     },
-    [],
+    [accountRole, activeConversation, router, user?.id]
   );
 
   const handleBulkStatusChange = useCallback(
@@ -613,15 +706,31 @@ function InboxPageInner() {
         prev.map((conversation) =>
           updatedIds.has(conversation.id)
             ? { ...conversation, status }
-            : conversation,
-        ),
+            : conversation
+        )
       );
       setActiveConversation((prev) =>
-        prev && updatedIds.has(prev.id) ? { ...prev, status } : prev,
+        prev && updatedIds.has(prev.id) ? { ...prev, status } : prev
       );
     },
-    [],
+    []
   );
+
+  const handleContactUpdated = useCallback((updatedContact: Contact) => {
+    setActiveContact(updatedContact);
+    setActiveConversation((previous) =>
+      previous && previous.contact_id === updatedContact.id
+        ? { ...previous, contact: updatedContact }
+        : previous
+    );
+    setConversations((previous) =>
+      previous.map((conversation) =>
+        conversation.contact_id === updatedContact.id
+          ? { ...conversation, contact: updatedContact }
+          : conversation
+      )
+    );
+  }, []);
 
   // On mobile (<lg) we show a SINGLE pane — either the list or the
   // thread — rather than cramming both side-by-side. Selecting a
@@ -637,9 +746,7 @@ function InboxPageInner() {
       {whatsappConnected === false && (
         <div className="flex shrink-0 items-center justify-center gap-2 border-b border-amber-500/20 bg-amber-500/10 px-4 py-2">
           <WifiOff className="h-4 w-4 text-amber-400" />
-          <p className="text-xs text-amber-400">
-            {t("whatsappNotConnected")}
-          </p>
+          <p className="text-xs text-amber-400">{t('whatsappNotConnected')}</p>
         </div>
       )}
 
@@ -649,8 +756,8 @@ function InboxPageInner() {
             thread can occupy the full width. Always visible on lg+. */}
         <div
           className={cn(
-            "flex h-full flex-1 lg:flex-none",
-            hasActiveConv ? "hidden lg:flex" : "flex",
+            'flex h-full flex-1 lg:flex-none',
+            hasActiveConv ? 'hidden lg:flex' : 'flex'
           )}
         >
           <ConversationList
@@ -676,8 +783,8 @@ function InboxPageInner() {
             on the right. Issue #165. */}
         <div
           className={cn(
-            "flex h-full min-w-0 flex-1 lg:flex",
-            hasActiveConv ? "flex" : "hidden lg:flex",
+            'flex h-full min-w-0 flex-1 lg:flex',
+            hasActiveConv ? 'flex' : 'hidden lg:flex'
           )}
         >
           <MessageThread
@@ -703,7 +810,10 @@ function InboxPageInner() {
             toggle — which is itself desktop-only — never affects it. */}
         {contactPanelOpen && (
           <div className="hidden lg:block">
-            <ContactSidebar contact={activeContact} />
+            <ContactSidebar
+              contact={activeContact}
+              onContactUpdated={handleContactUpdated}
+            />
           </div>
         )}
       </div>

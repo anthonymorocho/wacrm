@@ -54,17 +54,16 @@ export async function POST(request: Request) {
       );
     }
 
-    // One account-scoped UPDATE keeps the batch consistent and the source
-    // assignment guard prevents a stale selection from moving somebody
-    // else's conversation after a concurrent reassignment.
-    const { data: updated, error: updateError } = await supabase
-      .from('conversations')
-      .update({ assigned_agent_id: transfer.targetAgentId })
-      .eq('account_id', accountId)
-      .eq('assigned_agent_id', userId)
-      .in('status', ['open', 'pending'])
-      .in('id', transfer.conversationIds)
-      .select('id');
+    // The RPC performs the source-assignment guard and returns updated ids
+    // under SECURITY DEFINER. A normal UPDATE ... RETURNING would hide the
+    // newly transferred rows from the source agent's SELECT policy.
+    const { data: updated, error: updateError } = await supabase.rpc(
+      'transfer_conversations',
+      {
+        p_target_agent_id: transfer.targetAgentId,
+        p_conversation_ids: transfer.conversationIds,
+      },
+    );
 
     if (updateError) {
       console.error('[bulk-transfer] conversation update failed:', updateError);
@@ -75,8 +74,8 @@ export async function POST(request: Request) {
     }
 
     const transferredIds = (updated ?? [])
-      .map((row) => row.id)
-      .filter((id): id is string => typeof id === 'string');
+      .map((row: { id?: unknown }) => row.id)
+      .filter((id: unknown): id is string => typeof id === 'string');
 
     return NextResponse.json({
       transferred: transferredIds.length,

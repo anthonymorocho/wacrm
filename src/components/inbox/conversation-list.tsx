@@ -12,7 +12,7 @@ import {
 } from "@/lib/inbox/conversations";
 import { cn } from "@/lib/utils";
 import type { Conversation, ConversationStatus, Profile, Tag } from "@/types";
-import { ArrowRight, Search, ChevronDown, X } from "lucide-react";
+import { ArrowRight, CheckCheck, Search, ChevronDown, X } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { useTranslations } from "next-intl";
 import { Input } from "@/components/ui/input";
@@ -28,6 +28,8 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { BulkTransferDialog } from "./bulk-transfer-dialog";
+import { BulkCloseDialog } from "./bulk-close-dialog";
+import { getBulkDialogKey } from "@/lib/inbox/dialog-keys";
 
 interface ConversationListProps {
   activeConversationId: string | null;
@@ -37,6 +39,10 @@ interface ConversationListProps {
   onBulkAssignChange: (
     conversationIds: string[],
     assignedAgentId: string,
+  ) => void;
+  onBulkStatusChange: (
+    conversationIds: string[],
+    status: ConversationStatus,
   ) => void;
   /**
    * Increment to force the fetch effect below to refire. The parent
@@ -63,10 +69,12 @@ export function ConversationList({
   conversations,
   onConversationsLoaded,
   onBulkAssignChange,
+  onBulkStatusChange,
   resyncToken = 0,
 }: ConversationListProps) {
   const t = useTranslations("Inbox.conversationList");
   const tTransfer = useTranslations("Inbox.bulkTransfer");
+  const tClose = useTranslations("Inbox.bulkClose");
   const { user, canSendMessages } = useAuth();
   
   const FILTER_OPTIONS: { label: string; value: InboxFilter }[] = useMemo(() => [
@@ -87,6 +95,8 @@ export function ConversationList({
   >([]);
   const [transferDialogOpen, setTransferDialogOpen] = useState(false);
   const [transferring, setTransferring] = useState(false);
+  const [closeDialogOpen, setCloseDialogOpen] = useState(false);
+  const [closing, setClosing] = useState(false);
   // Contact-based filters (issue #272). Tags use OR logic (a conversation
   // matches if its contact carries any selected tag), consistent with
   // Broadcast audience filtering. Company is an exact match on the field.
@@ -342,6 +352,46 @@ export function ConversationList({
     [onBulkAssignChange, selectedConversationIds, tTransfer, transferring],
   );
 
+  const handleBulkClose = useCallback(async () => {
+    if (closing || selectedConversationIds.length === 0) return;
+
+    setClosing(true);
+    try {
+      const response = await fetch("/api/conversations/bulk-close", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ conversation_ids: selectedConversationIds }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(payload?.error ?? `HTTP ${response.status}`);
+      }
+
+      const closedIds = Array.isArray(payload?.conversation_ids)
+        ? payload.conversation_ids.filter(
+            (id: unknown): id is string => typeof id === "string",
+          )
+        : [];
+      onBulkStatusChange(closedIds, "closed");
+      setSelectedConversationIds((previous) =>
+        previous.filter((id) => !closedIds.includes(id)),
+      );
+      setCloseDialogOpen(false);
+
+      if (closedIds.length > 0) {
+        toast.success(tClose("success", { count: closedIds.length }));
+      } else {
+        toast.info(tClose("noChanges"));
+      }
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : tClose("error"),
+      );
+    } finally {
+      setClosing(false);
+    }
+  }, [closing, onBulkStatusChange, selectedConversationIds, tClose]);
+
   const toggleTag = useCallback((id: string) => {
     setSelectedTagIds((prev) =>
       prev.includes(id) ? prev.filter((t) => t !== id) : [...prev, id]
@@ -526,16 +576,28 @@ export function ConversationList({
                 : tTransfer("selectMine")}
             </span>
             {selectedConversationIds.length > 0 && (
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => setTransferDialogOpen(true)}
-                className="border-border text-xs text-popover-foreground hover:bg-muted"
-              >
-                <ArrowRight className="h-3.5 w-3.5" />
-                {tTransfer("transfer")}
-              </Button>
+              <>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCloseDialogOpen(true)}
+                  className="border-border text-xs text-popover-foreground hover:bg-muted"
+                >
+                  <CheckCheck className="h-3.5 w-3.5" />
+                  {tClose("action")}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setTransferDialogOpen(true)}
+                  className="border-border text-xs text-popover-foreground hover:bg-muted"
+                >
+                  <ArrowRight className="h-3.5 w-3.5" />
+                  {tTransfer("transfer")}
+                </Button>
+              </>
             )}
           </div>
         )}
@@ -621,7 +683,7 @@ export function ConversationList({
       </ScrollArea>
 
       <BulkTransferDialog
-        key={transferDialogOpen ? "open" : "closed"}
+        key={getBulkDialogKey("transfer", transferDialogOpen)}
         open={transferDialogOpen}
         onOpenChange={setTransferDialogOpen}
         selectedCount={selectedConversationIds.length}
@@ -629,6 +691,14 @@ export function ConversationList({
         currentUserId={user?.id}
         submitting={transferring}
         onConfirm={(targetAgentId) => void handleBulkTransfer(targetAgentId)}
+      />
+      <BulkCloseDialog
+        key={getBulkDialogKey("close", closeDialogOpen)}
+        open={closeDialogOpen}
+        onOpenChange={setCloseDialogOpen}
+        selectedCount={selectedConversationIds.length}
+        submitting={closing}
+        onConfirm={() => void handleBulkClose()}
       />
     </div>
   );

@@ -44,6 +44,7 @@ import {
 } from '@/lib/whatsapp/phone-utils';
 import type { MessageTemplate } from '@/types';
 import { isMessageTemplate } from '@/lib/whatsapp/template-row-guard';
+import { renderTemplateBody } from './template-message-text';
 
 export const MEDIA_KINDS = ['image', 'video', 'document', 'audio'] as const;
 export const VALID_MESSAGE_TYPES = [
@@ -495,6 +496,29 @@ export async function sendMessageToConversation(
   const interactiveBody =
     messageType === 'interactive' ? interactivePayload!.body : null;
 
+  // The browser sends a rendered preview for a manual template, but the
+  // server must be able to rebuild it too: automations and older clients may
+  // omit `content_text`, and it is the local template row—not client input—
+  // that owns the body shown in the inbox.
+  const templateBodyParams =
+    templateMessageParams &&
+    typeof templateMessageParams === 'object' &&
+    Array.isArray((templateMessageParams as { body?: unknown }).body)
+      ? (templateMessageParams as { body: unknown[] }).body.map(String)
+      : (templateParams ?? []);
+  const templateContentText =
+    messageType === 'template' && templateRow
+      ? renderTemplateBody(templateRow.body_text, templateBodyParams)
+      : null;
+  const templateFallback = templateName ? `[template:${templateName}]` : null;
+  const persistedContentText =
+    messageType === 'template'
+      ? (templateContentText ??
+        (typeof contentText === 'string' && contentText.trim()
+          ? contentText
+          : templateFallback))
+      : (interactiveBody ?? contentText ?? null);
+
   const { data: messageRecord, error: msgError } = await db
     .from('messages')
     .insert(
@@ -502,7 +526,7 @@ export async function sendMessageToConversation(
         conversationId,
         senderId,
         messageType,
-        contentText: interactiveBody ?? contentText ?? null,
+        contentText: persistedContentText,
         mediaUrl,
         templateName,
         interactivePayload:
@@ -526,7 +550,7 @@ export async function sendMessageToConversation(
   const lastMessageText =
     messageType === 'interactive'
       ? interactivePayloadPreviewText(interactivePayload!)
-      : contentText || `[${messageType}]`;
+      : persistedContentText || `[${messageType}]`;
 
   await db
     .from('conversations')

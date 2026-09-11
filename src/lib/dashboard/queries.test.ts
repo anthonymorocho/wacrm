@@ -1,6 +1,6 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
-import { buildAgentWorkload } from './queries';
+import { buildAgentWorkload, loadQueueCount } from './queries';
 
 describe('buildAgentWorkload', () => {
   it('includes zero-load eligible agents and excludes closed conversations', () => {
@@ -41,5 +41,29 @@ describe('buildAgentWorkload', () => {
         remaining: 400,
       }),
     ]);
+  });
+});
+
+describe('loadQueueCount', () => {
+  it('counts only unassigned open and pending conversations in the account', async () => {
+    const builder = {
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      is: vi.fn().mockReturnThis(),
+      in: vi.fn().mockResolvedValue({ count: 4, error: null }),
+    };
+    const db = {
+      from: vi.fn(() => builder),
+    };
+
+    await expect(loadQueueCount(db as never, 'account-1')).resolves.toBe(4);
+    expect(db.from).toHaveBeenCalledWith('conversations');
+    expect(builder.select).toHaveBeenCalledWith('id', {
+      count: 'exact',
+      head: true,
+    });
+    expect(builder.eq).toHaveBeenCalledWith('account_id', 'account-1');
+    expect(builder.is).toHaveBeenCalledWith('assigned_agent_id', null);
+    expect(builder.in).toHaveBeenCalledWith('status', ['open', 'pending']);
   });
 });

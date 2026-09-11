@@ -21,8 +21,8 @@
     "notifications": "알림",
     "contacts": "연락처",
     "pipelines": "파이프라인",
-    "broadcasts": "브로드캐스트",
-    "automations": "자동화",
+    "broadcasts": "대량 메시지",
+    "automations": "봇",
     "flows": "플로우",
     "aiAgents": "AI 에이전트",
     "settings": "설정",
@@ -46,9 +46,11 @@
     "notifications": "알림",
     "contacts": "연락처",
     "pipelines": "파이프라인",
-    "broadcasts": "브로드캐스트",
-    "automations": "자동화",
+    "broadcasts": "대량 메시지",
+    "automations": "봇",
     "settings": "설정",
+    "queued": "대기 중",
+    "queuedConversations": "대기 중인 대화 {count}개",
     "openMenu": "메뉴 열기",
     "openAccountMenu": "계정 메뉴 열기",
     "defaultUser": "사용자",
@@ -77,11 +79,22 @@
       "openDeals": "진행 중인 딜 {count}건",
       "noChange": "변동 없음 {suffix}"
     },
+    "agentWorkload": {
+      "title": "\uc0c1\ub2f4\uc6d0 \ubd80\ud558",
+      "description": "\uc0ac\uc6a9 \uac00\ub2a5\ud55c \ud300\uc6d0\ubcc4 \uc9c4\ud589 \uc911\uc778 \ub300\ud654",
+      "queued": "\ub300\uae30 \uc911",
+      "loading": "\uc0c1\ub2f4\uc6d0 \ubd80\ud558 \ub85c\ub529 \uc911",
+      "online": "\uc628\ub77c\uc778",
+      "offline": "\uc624\ud504\ub77c\uc778",
+      "available": "\uc0ac\uc6a9 \uac00\ub2a5",
+      "remaining": "{count}\uac1c \ub0a8\uc74c",
+      "noEligibleMembers": "\uc544\uc9c1 \uc0ac\uc6a9 \uac00\ub2a5\ud55c \ud300\uc6d0\uc774 \uc5c6\uc2b5\ub2c8\ub2e4."
+    },
     "quickActions": {
       "newContact": "새 연락처",
       "newDeal": "새 딜",
-      "newBroadcast": "새 브로드캐스트",
-      "newAutomation": "새 자동화"
+      "newBroadcast": "새 대량 메시지",
+      "newAutomation": "새 봇"
     },
     "activityFeed": {
       "title": "최근 활동",
@@ -177,6 +190,17 @@
       "noChanges": "전달된 대화가 없습니다. 이미 담당자가 변경되었을 수 있습니다.",
       "error": "대화를 전달할 수 없습니다."
     },
+    "bulkClose": {
+      "action": "닫기",
+      "title": "대화 닫기",
+      "description": "선택한 대화 {count}개를 닫으시겠습니까?",
+      "cancel": "취소",
+      "confirm": "대화 닫기",
+      "closing": "닫는 중...",
+      "success": "대화 {count}개를 닫았습니다.",
+      "noChanges": "닫힌 대화가 없습니다. 상태가 변경되었을 수 있습니다.",
+      "error": "대화를 닫을 수 없습니다."
+    },
     "messageThread": {
       "backToConversations": "대화 목록으로 돌아가기",
       "hideContactPanel": "연락처 패널 숨기기",
@@ -231,11 +255,20 @@
       "interactiveMessage": "인터랙티브 메시지",
       "quickReplies": "빠른 답장",
       "quickRepliesEmpty": "아직 빠른 답장이 없습니다. 설정 → 빠른 답장에서 추가하세요.",
+      "quickReplyShortcutHint": "/를 입력해 빠른 답장을 검색하세요",
+      "selectQuickReply": "{title} 선택",
       "saveAsQuickReply": "빠른 답장으로 저장",
       "send": "보내기",
       "quickReplyNamePrompt": "이 빠른 답장의 이름을 지정하세요:",
       "quickReplySaved": "빠른 답장으로 저장되었습니다.",
-      "quickReplySaveError": "빠른 답장을 저장하지 못했습니다."
+      "quickReplySaveError": "빠른 답장을 저장하지 못했습니다.",
+      "emojiPicker": "이모지 삽입",
+      "insertEmoji": "{emoji} 삽입",
+      "emojiCategories": {
+        "smileys": "표정",
+        "gestures": "손동작",
+        "symbols": "기호"
+      }
     },
     "bubble": {
       "photo": "사진",
@@ -249,6 +282,14 @@
       "interactiveReply": "[인터랙티브 응답]",
       "unsupported": "[지원되지 않는 메시지 형식]",
       "aiBadge": "AI",
+      "openImage": "이미지 열기",
+      "imageViewerTitle": "이미지 뷰어",
+      "imageViewerDescription": "이미지를 크게 보고 크기를 조절하세요.",
+      "imageControls": "이미지 제어",
+      "zoomOut": "축소",
+      "zoomIn": "확대",
+      "resetZoom": "확대/축소 초기화",
+      "closeImage": "이미지 닫기",
       "aiBadgeTitle": "AI 어시스턴트가 자동으로 전송함"
     },
     "actions": {

@@ -21,8 +21,8 @@
     "notifications": "Notifications",
     "contacts": "Contacts",
     "pipelines": "Pipelines",
-    "broadcasts": "Broadcasts",
-    "automations": "Automations",
+    "broadcasts": "Mass Messaging",
+    "automations": "Bots",
     "flows": "Flows",
     "aiAgents": "AI Agents",
     "settings": "Settings",
@@ -46,9 +46,11 @@
     "notifications": "Notifications",
     "contacts": "Contacts",
     "pipelines": "Pipelines",
-    "broadcasts": "Broadcasts",
-    "automations": "Automations",
+    "broadcasts": "Mass Messaging",
+    "automations": "Bots",
     "settings": "Settings",
+    "queued": "Queued",
+    "queuedConversations": "{count} conversations waiting",
     "openMenu": "Open menu",
     "openAccountMenu": "Open account menu",
     "defaultUser": "User",
@@ -77,11 +79,22 @@
       "openDeals": "{count} open {count, plural, =1 {deal} other {deals}}",
       "noChange": "No change {suffix}"
     },
+    "agentWorkload": {
+      "title": "Agent workload",
+      "description": "Active conversations per available team member",
+      "queued": "Queued",
+      "loading": "Loading agent workload",
+      "online": "Online",
+      "offline": "Offline",
+      "available": "Available",
+      "remaining": "{count} remaining",
+      "noEligibleMembers": "No eligible team members yet."
+    },
     "quickActions": {
       "newContact": "New Contact",
       "newDeal": "New Deal",
-      "newBroadcast": "New Broadcast",
-      "newAutomation": "New Automation"
+      "newBroadcast": "New Mass Message",
+      "newAutomation": "New Bot"
     },
     "activityFeed": {
       "title": "Recent Activity",
@@ -177,6 +190,17 @@
       "noChanges": "No conversations were transferred; their assignment may have changed.",
       "error": "Could not transfer the conversations."
     },
+    "bulkClose": {
+      "action": "Close",
+      "title": "Close conversations",
+      "description": "Are you sure you want to close {count} selected conversations?",
+      "cancel": "Cancel",
+      "confirm": "Close conversations",
+      "closing": "Closing...",
+      "success": "{count} conversations closed.",
+      "noChanges": "No conversations were closed; their status may have changed.",
+      "error": "Could not close the conversations."
+    },
     "messageThread": {
       "backToConversations": "Back to conversations",
       "hideContactPanel": "Hide contact panel",
@@ -231,11 +255,20 @@
       "interactiveMessage": "Interactive message",
       "quickReplies": "Quick replies",
       "quickRepliesEmpty": "No quick replies yet. Add some in Settings → Quick replies.",
+      "quickReplyShortcutHint": "Type / to search quick replies",
+      "selectQuickReply": "Select {title}",
       "saveAsQuickReply": "Save as quick reply",
       "send": "Send",
       "quickReplyNamePrompt": "Name this quick reply:",
       "quickReplySaved": "Saved as a quick reply.",
-      "quickReplySaveError": "Couldn't save the quick reply."
+      "quickReplySaveError": "Couldn't save the quick reply.",
+      "emojiPicker": "Insert emoji",
+      "insertEmoji": "Insert {emoji}",
+      "emojiCategories": {
+        "smileys": "Smileys",
+        "gestures": "Gestures",
+        "symbols": "Symbols"
+      }
     },
     "bubble": {
       "photo": "Photo",
@@ -249,6 +282,14 @@
       "interactiveReply": "[Interactive reply]",
       "unsupported": "[Unsupported message type]",
       "aiBadge": "AI",
+      "openImage": "Open image",
+      "imageViewerTitle": "Image viewer",
+      "imageViewerDescription": "View the image larger and adjust its zoom.",
+      "imageControls": "Image controls",
+      "zoomOut": "Zoom out",
+      "zoomIn": "Zoom in",
+      "resetZoom": "Reset zoom",
+      "closeImage": "Close image",
       "aiBadgeTitle": "Sent automatically by the AI assistant"
     },
     "actions": {

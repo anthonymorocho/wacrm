@@ -14,6 +14,7 @@ const messageInserts: Array<Record<string, unknown>> = []
 // Toggles for the per-test scenario.
 let existingConversation: Record<string, unknown> | null = null
 let contactRow: Record<string, unknown> | null = null
+let messageTemplateRow: Record<string, unknown> | null = null
 // The caller's role, as `requireRole` reads it off the profile. Sending
 // requires 'agent'; 'viewer' must be refused before anything reaches Meta.
 let callerRole: string = 'admin'
@@ -64,7 +65,7 @@ function makeSupabaseMock() {
             error: null,
           }
         case 'message_templates':
-          return { data: null, error: null }
+          return { data: messageTemplateRow, error: null }
         default:
           return { data: null, error: null }
       }
@@ -198,6 +199,7 @@ describe('POST /api/whatsapp/send — contact_id template path', () => {
     existingConversation = null
     createdConversation = null
     contactRow = CONTACT
+    messageTemplateRow = null
     callerRole = 'admin'
     supabaseMock = makeSupabaseMock()
     sendTemplateMessage.mockClear()
@@ -238,6 +240,7 @@ describe('POST /api/whatsapp/send — contact_id template path', () => {
       conversation_id: 'conv-new',
       content_type: 'template',
       template_name: 'order_update',
+      content_text: '[template:order_update]',
       sender_type: 'agent',
       sender_id: 'user-1',
     })
@@ -257,8 +260,28 @@ describe('POST /api/whatsapp/send — contact_id template path', () => {
     expect(conversationInserts).toHaveLength(0)
     expect(messageInserts[0]).toMatchObject({
       conversation_id: 'conv-existing',
+    })
   })
-  });
+
+  it('rebuilds template content on the server when the client omits the preview', async () => {
+    messageTemplateRow = {
+      id: 'template-1',
+      user_id: 'user-1',
+      name: 'order_update',
+      category: 'Utility',
+      language: 'en_US',
+      body_text: 'Hola {{1}}, tu pedido {{2}} está listo.',
+      created_at: '2026-01-01T00:00:00Z',
+    }
+
+    const res = await postContactTemplate()
+
+    expect(res.status).toBe(200)
+    expect(messageInserts[0]).toMatchObject({
+      content_type: 'template',
+      content_text: 'Hola Acme, tu pedido #1234 está listo.',
+    })
+  })
 
   it('404s when the contact is not in the caller account', async () => {
     contactRow = null
@@ -295,6 +318,7 @@ describe('POST /api/whatsapp/send — role enforcement', () => {
     }
     createdConversation = null
     contactRow = CONTACT
+    messageTemplateRow = null
     callerRole = 'admin'
     supabaseMock = makeSupabaseMock()
     sendTemplateMessage.mockClear()

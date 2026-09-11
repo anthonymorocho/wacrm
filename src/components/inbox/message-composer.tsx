@@ -5,6 +5,7 @@ import {
   useRef,
   useCallback,
   useEffect,
+  useMemo,
   KeyboardEvent,
 } from "react";
 import {
@@ -22,6 +23,7 @@ import {
   Plus,
   MessageSquareDashed,
   Zap,
+  Smile,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { GatedButton } from "@/components/ui/gated-button";
@@ -38,6 +40,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { useCan } from "@/hooks/use-can";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -55,6 +62,12 @@ import {
 import { validateInteractivePayload } from "@/lib/whatsapp/interactive";
 import type { InteractiveMessagePayload, QuickReply } from "@/types";
 import { QuickReplyPicker } from "./quick-reply-picker";
+import {
+  getQuickReplySuggestions,
+  replaceQuickReplyShortcut,
+  type QuickReplySuggestion,
+} from "@/lib/inbox/quick-reply-shortcuts";
+import { insertEmojiAtSelection } from "@/lib/inbox/emoji-input";
 
 /** Media content types an agent can send from the composer. */
 export type ComposerMediaKind = "image" | "video" | "document" | "audio";
@@ -68,6 +81,25 @@ export const MEDIA_CAPTION_MAX = 1024;
 /** Hard cap on a single voice recording so it can't blow the upload/
  *  transcode limits — auto-stops the recorder when reached. */
 const MAX_RECORDING_SECONDS = 5 * 60;
+
+const EMOJI_GROUPS = [
+  {
+    labelKey: "emojiCategories.smileys",
+    emojis: [
+      "😀", "😃", "😄", "😁", "😂", "🙂", "🙃", "😉",
+      "😊", "😍", "🥰", "😘", "😎", "🤔", "😢", "😭",
+      "😡", "😱", "🤗", "🙏",
+    ],
+  },
+  {
+    labelKey: "emojiCategories.gestures",
+    emojis: ["👍", "👎", "👌", "✌️", "🤝", "👋", "🙌", "👏", "💪"],
+  },
+  {
+    labelKey: "emojiCategories.symbols",
+    emojis: ["❤️", "💯", "🎉", "🔥", "✅", "⭐", "🎁", "☕"],
+  },
+] as const;
 
 export interface SendMediaPayload {
   kind: ComposerMediaKind;
@@ -147,6 +179,7 @@ export function MessageComposer({
   const [sending, setSending] = useState(false);
   const [drafting, setDrafting] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const selectionRef = useRef({ start: 0, end: 0 });
 
   // Interactive-message builder dialog + quick-reply picker.
   const [interactiveOpen, setInteractiveOpen] = useState(false);
@@ -154,6 +187,34 @@ export function MessageComposer({
     useState<InteractiveMessagePayload>(blankButtonsPayload);
   const [savingQuickReply, setSavingQuickReply] = useState(false);
   const [quickReplyOpen, setQuickReplyOpen] = useState(false);
+  const [quickReplies, setQuickReplies] = useState<QuickReply[]>([]);
+  const [caretPosition, setCaretPosition] = useState(0);
+  const [emojiOpen, setEmojiOpen] = useState(false);
+  const [quickReplyIndex, setQuickReplyIndex] = useState(0);
+  const [quickRepliesDismissed, setQuickRepliesDismissed] = useState(false);
+
+  // Load the account-scoped list used by slash commands. The existing picker
+  // refreshes its own list when opened, so newly created replies are still
+  // available there without reloading the conversation.
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch("/api/quick-replies", { cache: "no-store" });
+        const data = await res.json().catch(() => ({}));
+        if (!cancelled && res.ok) {
+          setQuickReplies((data.quick_replies as QuickReply[]) ?? []);
+        }
+      } catch {
+        // The existing picker also handles an unavailable list by showing it
+        // empty; the composer remains usable for normal messages.
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Media attachment state. `draft` holds an uploaded-but-not-yet-sent
   // attachment; `busy` covers the upload/transcode window.
@@ -220,6 +281,33 @@ export function MessageComposer({
     el.style.height = `${Math.min(el.scrollHeight, 96)}px`;
   }, []);
 
+  const focusTextareaAt = useCallback(
+    (position: number) => {
+      requestAnimationFrame(() => {
+        adjustHeight();
+        const el = textareaRef.current;
+        if (!el) return;
+        el.focus();
+        el.setSelectionRange(position, position);
+        selectionRef.current = { start: position, end: position };
+        setCaretPosition(position);
+      });
+    },
+    [adjustHeight],
+  );
+
+  const quickReplySuggestions = useMemo(
+    () =>
+      quickRepliesDismissed
+        ? []
+        : getQuickReplySuggestions(text, quickReplies, caretPosition),
+    [caretPosition, quickReplies, quickRepliesDismissed, text],
+  );
+  const highlightedQuickReplyIndex =
+    quickReplySuggestions.length === 0
+      ? 0
+      : Math.min(quickReplyIndex, quickReplySuggestions.length - 1);
+
   const handleSend = useCallback(async () => {
     const trimmed = text.trim();
     if (!trimmed || sending || sessionExpired) return;
@@ -236,22 +324,50 @@ export function MessageComposer({
     }
   }, [text, sending, sessionExpired, onSend, replyTo?.id]);
 
-  const handleKeyDown = useCallback(
-    (e: KeyboardEvent<HTMLTextAreaElement>) => {
-      if (e.key === "Enter" && !e.shiftKey) {
-        e.preventDefault();
-        handleSend();
-      }
-    },
-    [handleSend]
-  );
-
   const handleChange = useCallback(
     (e: React.ChangeEvent<HTMLTextAreaElement>) => {
       setText(e.target.value);
+      selectionRef.current = {
+        start: e.target.selectionStart,
+        end: e.target.selectionEnd,
+      };
+      setCaretPosition(e.target.selectionStart);
+      setQuickReplyIndex(0);
+      setQuickRepliesDismissed(false);
       adjustHeight();
     },
     [adjustHeight]
+  );
+
+  const syncCaretPosition = useCallback(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    selectionRef.current = {
+      start: el.selectionStart,
+      end: el.selectionEnd,
+    };
+    setCaretPosition(el.selectionStart);
+    setQuickRepliesDismissed(false);
+  }, []);
+
+  const handleEmojiSelect = useCallback(
+    (emoji: string) => {
+      const result = insertEmojiAtSelection(
+        text,
+        emoji,
+        selectionRef.current.start,
+        selectionRef.current.end,
+      );
+      setText(result.value);
+      setCaretPosition(result.cursorPosition);
+      selectionRef.current = {
+        start: result.cursorPosition,
+        end: result.cursorPosition,
+      };
+      setEmojiOpen(false);
+      focusTextareaAt(result.cursorPosition);
+    },
+    [focusTextareaAt, text],
   );
 
   // Ask the AI assistant for a suggested reply and drop it into the
@@ -289,6 +405,10 @@ export function MessageComposer({
         if (el) {
           el.focus();
           el.setSelectionRange(el.value.length, el.value.length);
+          selectionRef.current = {
+            start: el.value.length,
+            end: el.value.length,
+          };
         }
       });
     } catch {
@@ -346,6 +466,12 @@ export function MessageComposer({
         toast.error(data.error ?? t("quickReplySaveError"));
         return;
       }
+      if (data.quick_reply?.id) {
+        setQuickReplies((previous) => [
+          data.quick_reply as QuickReply,
+          ...previous.filter((item) => item.id !== data.quick_reply.id),
+        ]);
+      }
       toast.success(t("quickReplySaved"));
     } catch {
       toast.error(t("quickReplySaveError"));
@@ -375,10 +501,89 @@ export function MessageComposer({
         if (el) {
           el.focus();
           el.setSelectionRange(el.value.length, el.value.length);
+          selectionRef.current = {
+            start: el.value.length,
+            end: el.value.length,
+          };
         }
       });
     },
     [openInteractiveBuilder, adjustHeight],
+  );
+
+  const handleQuickReplySuggestion = useCallback(
+    (suggestion: QuickReplySuggestion) => {
+      const quickReply = suggestion.quickReply;
+      const interactivePayload =
+        quickReply.kind === "interactive"
+          ? quickReply.interactive_payload
+          : null;
+      const result = replaceQuickReplyShortcut(
+        text,
+        interactivePayload ? "" : quickReply.content_text ?? "",
+        caretPosition,
+      );
+
+      setText(result.text);
+      setCaretPosition(result.caretPosition);
+      setQuickReplyIndex(0);
+      setQuickRepliesDismissed(true);
+
+      if (interactivePayload) {
+        openInteractiveBuilder(interactivePayload);
+      } else {
+        focusTextareaAt(result.caretPosition);
+      }
+    },
+    [caretPosition, focusTextareaAt, openInteractiveBuilder, text],
+  );
+
+  const handleKeyDown = useCallback(
+    (e: KeyboardEvent<HTMLTextAreaElement>) => {
+      if (quickReplySuggestions.length > 0) {
+        if (e.key === "ArrowDown") {
+          e.preventDefault();
+          setQuickReplyIndex(
+            (previous) =>
+              (previous + 1) % quickReplySuggestions.length,
+          );
+          return;
+        }
+        if (e.key === "ArrowUp") {
+          e.preventDefault();
+          setQuickReplyIndex(
+            (previous) =>
+              (previous - 1 + quickReplySuggestions.length) %
+              quickReplySuggestions.length,
+          );
+          return;
+        }
+        if (e.key === "Escape") {
+          e.preventDefault();
+          setQuickRepliesDismissed(true);
+          setQuickReplyIndex(0);
+          return;
+        }
+        if (e.key === "Tab" || (e.key === "Enter" && !e.shiftKey)) {
+          e.preventDefault();
+          handleQuickReplySuggestion(
+            quickReplySuggestions[highlightedQuickReplyIndex],
+          );
+          return;
+        }
+      }
+
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        handleSend();
+      }
+    },
+    [
+      handleQuickReplySuggestion,
+      handleSend,
+      highlightedQuickReplyIndex,
+      quickReplySuggestions,
+    ],
   );
 
   // Upload a captured file to chat-media and stage it as a draft.
@@ -630,6 +835,59 @@ export function MessageComposer({
         </div>
       ) : (
         <div className="flex items-end gap-2">
+          {/* Emoji picker inserts native Unicode text at the saved cursor. */}
+          <Popover open={emojiOpen} onOpenChange={setEmojiOpen}>
+            <PopoverTrigger
+              disabled={inputsDisabled || busy}
+              title={
+                readOnly
+                  ? t("readOnlyTitle")
+                  : inputsDisabled
+                    ? undefined
+                    : t("emojiPicker")
+              }
+              aria-label={t("emojiPicker")}
+              className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md p-0 text-muted-foreground hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <Smile className="h-4 w-4" />
+            </PopoverTrigger>
+            <PopoverContent
+              align="start"
+              side="top"
+              sideOffset={8}
+              className="w-72 p-2"
+            >
+              <div className="space-y-2" aria-label={t("emojiPicker")}>
+                {EMOJI_GROUPS.map((group) => (
+                  <div
+                    key={group.labelKey}
+                    role="group"
+                    aria-label={t(group.labelKey)}
+                  >
+                    <p className="mb-1 px-1 text-[10px] font-medium text-muted-foreground">
+                      {t(group.labelKey)}
+                    </p>
+                    <div className="grid grid-cols-8 gap-0.5">
+                      {group.emojis.map((emoji) => (
+                        <button
+                          key={emoji}
+                          type="button"
+                          onMouseDown={(event) => event.preventDefault()}
+                          onClick={() => handleEmojiSelect(emoji)}
+                          className="flex h-8 w-8 items-center justify-center rounded-md text-lg leading-none transition-colors hover:bg-muted focus-visible:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                          aria-label={t("insertEmoji", { emoji })}
+                          title={emoji}
+                        >
+                          {emoji}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </PopoverContent>
+          </Popover>
+
           {/* Attach menu — photo / video / document / voice. */}
           <DropdownMenu>
             <DropdownMenuTrigger
@@ -726,29 +984,104 @@ export function MessageComposer({
             )}
           </GatedButton>
 
-          <textarea
-            ref={textareaRef}
-            value={text}
-            onChange={handleChange}
-            onKeyDown={handleKeyDown}
-            placeholder={
-              readOnly
-                ? t("readOnlyPlaceholder")
-                : sessionExpired
-                  ? t("sessionExpiredPlaceholder")
-                  : t("typeMessagePlaceholder")
-            }
-            disabled={sessionExpired || readOnly}
-            rows={1}
-            // Textarea keeps its own inline title — the GatedButton
-            // wrapping pattern doesn't apply to non-button inputs.
-            // The placeholder text also surfaces the read-only state.
-            title={readOnly ? t("readOnlyTitle") : undefined}
-            className={cn(
-              "min-w-0 flex-1 resize-none rounded-xl border border-border bg-muted px-4 py-2.5 text-sm text-foreground placeholder-muted-foreground outline-none transition-colors focus:border-primary/50",
-              (sessionExpired || readOnly) && "cursor-not-allowed opacity-50"
+          <div className="relative min-w-0 flex-1">
+            {quickReplySuggestions.length > 0 && (
+              <div
+                id="quick-reply-suggestions"
+                role="listbox"
+                aria-label={t("quickReplyShortcutHint")}
+                className="absolute bottom-full left-0 z-20 mb-2 max-h-60 w-full overflow-y-auto rounded-lg border border-border bg-popover p-1 shadow-lg"
+              >
+                <p className="px-2 py-1 text-[10px] text-muted-foreground">
+                  {t("quickReplyShortcutHint")}
+                </p>
+                {quickReplySuggestions.map((suggestion, index) => {
+                  const quickReply = suggestion.quickReply;
+                  const isHighlighted = index === highlightedQuickReplyIndex;
+                  return (
+                    <button
+                      key={quickReply.id}
+                      id={`quick-reply-suggestion-${quickReply.id}`}
+                      type="button"
+                      role="option"
+                      aria-selected={isHighlighted}
+                      aria-label={t("selectQuickReply", {
+                        title: quickReply.title,
+                      })}
+                      onMouseDown={(e) => e.preventDefault()}
+                      onMouseEnter={() => setQuickReplyIndex(index)}
+                      onClick={() => handleQuickReplySuggestion(suggestion)}
+                      className={cn(
+                        "flex w-full items-start gap-2 rounded-md px-2 py-1.5 text-left transition-colors",
+                        isHighlighted ? "bg-muted" : "hover:bg-muted/70",
+                      )}
+                    >
+                      {quickReply.kind === "interactive" ? (
+                        <Zap className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />
+                      ) : (
+                        <MessageSquareDashed className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                      )}
+                      <span className="min-w-0 flex-1">
+                        <span className="flex items-center justify-between gap-2">
+                          <span className="truncate text-xs font-medium text-popover-foreground">
+                            {quickReply.title}
+                          </span>
+                          <span className="shrink-0 text-[10px] text-muted-foreground">
+                            /{suggestion.shortcut}
+                          </span>
+                        </span>
+                        <span className="block truncate text-[10px] text-muted-foreground">
+                          {quickReply.kind === "interactive"
+                            ? t("interactiveMessage")
+                            : quickReply.content_text}
+                        </span>
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
             )}
-          />
+
+            <textarea
+              ref={textareaRef}
+              value={text}
+              onChange={handleChange}
+              onKeyDown={handleKeyDown}
+              onSelect={syncCaretPosition}
+              onClick={() => {
+                syncCaretPosition();
+                setQuickRepliesDismissed(false);
+              }}
+              aria-autocomplete="list"
+              aria-controls={
+                quickReplySuggestions.length > 0
+                  ? "quick-reply-suggestions"
+                  : undefined
+              }
+              aria-activedescendant={
+                quickReplySuggestions.length > 0
+                  ? `quick-reply-suggestion-${quickReplySuggestions[highlightedQuickReplyIndex].quickReply.id}`
+                  : undefined
+              }
+              placeholder={
+                readOnly
+                  ? t("readOnlyPlaceholder")
+                  : sessionExpired
+                    ? t("sessionExpiredPlaceholder")
+                    : t("typeMessagePlaceholder")
+              }
+              disabled={sessionExpired || readOnly}
+              rows={1}
+              // Textarea keeps its own inline title — the GatedButton
+              // wrapping pattern doesn't apply to non-button inputs.
+              // The placeholder text also surfaces the read-only state.
+              title={readOnly ? t("readOnlyTitle") : undefined}
+              className={cn(
+                "w-full min-w-0 resize-none rounded-xl border border-border bg-muted px-4 py-2.5 text-sm text-foreground placeholder-muted-foreground outline-none transition-colors focus:border-primary/50",
+                (sessionExpired || readOnly) && "cursor-not-allowed opacity-50",
+              )}
+            />
+          </div>
 
           <GatedButton
             size="sm"

@@ -20,6 +20,7 @@ import { ReplyQuote } from "./reply-quote";
 import { MessageReactions } from "./message-reactions";
 import { InteractivePreview } from "@/components/interactive/interactive-preview";
 import { useTranslations } from "next-intl";
+import { ImageViewer } from "./image-viewer";
 
 interface MessageBubbleProps {
   message: Message;
@@ -117,14 +118,7 @@ function MediaImage({ url, alt }: { url: string; alt: string }) {
     );
   }
 
-  return (
-    <img
-      src={src ?? ""}
-      alt={alt}
-      className="max-h-64 max-w-60 rounded-lg object-cover"
-      onError={() => setError(true)}
-    />
-  );
+  return <ImageViewer src={src ?? ""} alt={alt} onError={() => setError(true)} />;
 }
 
 function MessageContent({

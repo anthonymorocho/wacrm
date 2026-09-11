@@ -43,6 +43,41 @@ export function normalizeConversations(
 }
 
 /**
+ * Apply message activity to an existing inbox row and move it to the top.
+ * Realtime can deliver events out of order, so an older event is ignored
+ * instead of overwriting the latest preview or changing its position.
+ */
+export function updateConversationActivity(
+  conversations: Conversation[],
+  conversationId: string,
+  activityAt: string,
+  patch: Partial<Conversation> = {},
+): Conversation[] {
+  const index = conversations.findIndex((item) => item.id === conversationId);
+  if (index < 0) return conversations;
+
+  const current = conversations[index];
+  const incomingTime = Date.parse(activityAt);
+  const currentTime = Date.parse(
+    current.last_message_at ?? current.updated_at ?? current.created_at,
+  );
+  if (
+    Number.isFinite(incomingTime) &&
+    Number.isFinite(currentTime) &&
+    incomingTime < currentTime
+  ) {
+    return conversations;
+  }
+
+  const updated = {
+    ...current,
+    ...patch,
+    last_message_at: activityAt,
+  };
+  return [updated, ...conversations.slice(0, index), ...conversations.slice(index + 1)];
+}
+
+/**
  * Active Inbox work is limited to open/pending conversations that already
  * have an agent. Unassigned work belongs in the explicit queue view.
  */

@@ -7,13 +7,13 @@ import { createClient } from "@/lib/supabase/client";
 import {
   CONVERSATION_SELECT,
   normalizeConversation,
+  updateConversationActivity,
 } from "@/lib/inbox/conversations";
 import type { Conversation, Message, Contact, ConversationStatus } from "@/types";
 import { useRealtime } from "@/hooks/use-realtime";
 import { ConversationList } from "@/components/inbox/conversation-list";
 import { MessageThread } from "@/components/inbox/message-thread";
 import { ContactSidebar } from "@/components/inbox/contact-sidebar";
-import { toast } from "sonner";
 import { WifiOff } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -240,21 +240,25 @@ function InboxPageInner() {
         // knownConvIdsRef for why a closure flag inside the updater would
         // always read false here.
         if (knownConvIdsRef.current.has(newMsg.conversation_id)) {
-          setConversations((prev) =>
-            prev.map((c) =>
-              c.id === newMsg.conversation_id
-                ? {
-                    ...c,
-                    last_message_text: newMsg.content_text ?? "",
-                    last_message_at: newMsg.created_at,
-                    unread_count:
-                      activeConversation?.id === newMsg.conversation_id
-                        ? 0
-                        : c.unread_count + 1,
-                  }
-                : c,
-            ),
-          );
+          setConversations((prev) => {
+            const current = prev.find(
+              (conversation) => conversation.id === newMsg.conversation_id,
+            );
+            if (!current) return prev;
+
+            return updateConversationActivity(
+              prev,
+              newMsg.conversation_id,
+              newMsg.created_at,
+              {
+                last_message_text: newMsg.content_text ?? "",
+                unread_count:
+                  activeConversation?.id === newMsg.conversation_id
+                    ? 0
+                    : current.unread_count + 1,
+              },
+            );
+          });
         } else {
           // First time we're seeing this conv: the conv-INSERT event
           // hasn't landed yet, or was missed. Hydrate from the DB so
@@ -307,17 +311,46 @@ function InboxPageInner() {
           // back on for the ~100ms it takes for the reset effect's server
           // UPDATE to round-trip. Non-active convs take the value as-is.
           const isActive = activeConversation?.id === conv.id;
-          setConversations((prev) =>
-            prev.map((c) =>
-              c.id === conv.id
+          setConversations((prev) => {
+            const current = prev.find((conversation) => conversation.id === conv.id);
+            if (!current) return prev;
+
+            const incomingActivityAt = conv.last_message_at;
+            const incomingTime = incomingActivityAt
+              ? Date.parse(incomingActivityAt)
+              : Number.NaN;
+            const currentTime = current.last_message_at
+              ? Date.parse(current.last_message_at)
+              : Number.NaN;
+            const hasNewerActivity =
+              Boolean(incomingActivityAt) &&
+              (!current.last_message_at ||
+                (Number.isFinite(incomingTime) &&
+                  (!Number.isFinite(currentTime) || incomingTime > currentTime)));
+
+            const merged = prev.map((conversation) =>
+              conversation.id === conv.id
                 ? {
-                    ...c,
+                    ...conversation,
                     ...conv,
+                    // Status/assignment updates can carry the previous
+                    // message timestamp. Do not let them overwrite a
+                    // fresher preview already received through realtime.
+                    ...(hasNewerActivity
+                      ? {}
+                      : {
+                          last_message_at: conversation.last_message_at,
+                          last_message_text: conversation.last_message_text,
+                        }),
                     unread_count: isActive ? 0 : conv.unread_count,
                   }
-                : c,
-            ),
-          );
+                : conversation,
+            );
+
+            return hasNewerActivity && incomingActivityAt
+              ? updateConversationActivity(merged, conv.id, incomingActivityAt)
+              : merged;
+          });
         } else {
           // UPDATE arrived before the INSERT (or after a missed INSERT)
           // — fetch the row so it surfaces with its contact joined. The
@@ -573,6 +606,23 @@ function InboxPageInner() {
     [],
   );
 
+  const handleBulkStatusChange = useCallback(
+    (conversationIds: string[], status: ConversationStatus) => {
+      const updatedIds = new Set(conversationIds);
+      setConversations((prev) =>
+        prev.map((conversation) =>
+          updatedIds.has(conversation.id)
+            ? { ...conversation, status }
+            : conversation,
+        ),
+      );
+      setActiveConversation((prev) =>
+        prev && updatedIds.has(prev.id) ? { ...prev, status } : prev,
+      );
+    },
+    [],
+  );
+
   // On mobile (<lg) we show a SINGLE pane — either the list or the
   // thread — rather than cramming both side-by-side. Selecting a
   // conversation slides the thread in; the thread's back button pops
@@ -609,6 +659,7 @@ function InboxPageInner() {
             conversations={conversations}
             onConversationsLoaded={handleConversationsLoaded}
             onBulkAssignChange={handleBulkAssignChange}
+            onBulkStatusChange={handleBulkStatusChange}
             resyncToken={resyncToken}
           />
         </div>

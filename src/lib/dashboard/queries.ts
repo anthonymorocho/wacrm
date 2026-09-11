@@ -145,6 +145,22 @@ export async function loadAgentWorkload(
   );
 }
 
+/** Load only the queued conversation count for lightweight header updates. */
+export async function loadQueueCount(
+  db: DB,
+  accountId: string,
+): Promise<number> {
+  const { count, error } = await db
+    .from('conversations')
+    .select('id', { count: 'exact', head: true })
+    .eq('account_id', accountId)
+    .is('assigned_agent_id', null)
+    .in('status', ['open', 'pending']);
+
+  if (error) throw error;
+  return count ?? 0;
+}
+
 // --- 1. Metric cards ---------------------------------------------------
 
 export async function loadMetrics(db: DB): Promise<MetricsBundle> {

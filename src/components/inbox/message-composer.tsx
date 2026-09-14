@@ -72,6 +72,12 @@ import {
   buildQuickReplyImageDraft,
 } from '@/lib/inbox/quick-reply-media';
 import { insertEmojiAtSelection } from '@/lib/inbox/emoji-input';
+import {
+  getFileDropEffect,
+  getImageFileFromClipboardItems,
+  getImageFileFromDroppedFiles,
+  isCurrentMediaUpload,
+} from '@/lib/inbox/image-attachment';
 
 /** Media content types an agent can send from the composer. */
 export type ComposerMediaKind = 'image' | 'video' | 'document' | 'audio';
@@ -251,6 +257,8 @@ export function MessageComposer({
   // state. Kept in sync below so navigating away with a staged-but-unsent
   // attachment GCs the orphaned object.
   const draftRef = useRef<MediaDraft | null>(null);
+  const uploadGenerationRef = useRef(0);
+  const mountedRef = useRef(true);
   useEffect(() => {
     draftRef.current = draft;
   }, [draft]);
@@ -288,7 +296,10 @@ export function MessageComposer({
   // navigation doesn't leak the mic, and GC a staged-but-unsent
   // attachment so it doesn't orphan in the bucket.
   useEffect(() => {
+    mountedRef.current = true;
     return () => {
+      mountedRef.current = false;
+      uploadGenerationRef.current += 1;
       clearTimer();
       cancelledRef.current = true;
       // stop() releases the mic stream + audio context inside opus-recorder.
@@ -649,11 +660,23 @@ export function MessageComposer({
         return;
       }
       setBusy(true);
+      const uploadId = uploadGenerationRef.current + 1;
+      uploadGenerationRef.current = uploadId;
       try {
         const { publicUrl, path } = await uploadAccountMedia(
           CHAT_MEDIA_BUCKET,
           file
         );
+        if (
+          !isCurrentMediaUpload(
+            uploadId,
+            uploadGenerationRef.current,
+            mountedRef.current
+          )
+        ) {
+          removeStaged(path);
+          return;
+        }
         // Replacing an existing draft? GC the previous object first.
         removeStaged(draftRef.current?.path);
         setDraft({
@@ -664,9 +687,25 @@ export function MessageComposer({
           caption: '',
         });
       } catch (err) {
-        toast.error(err instanceof Error ? err.message : 'Upload failed.');
+        if (
+          isCurrentMediaUpload(
+            uploadId,
+            uploadGenerationRef.current,
+            mountedRef.current
+          )
+        ) {
+          toast.error(err instanceof Error ? err.message : 'Upload failed.');
+        }
       } finally {
-        setBusy(false);
+        if (
+          isCurrentMediaUpload(
+            uploadId,
+            uploadGenerationRef.current,
+            mountedRef.current
+          )
+        ) {
+          setBusy(false);
+        }
       }
     },
     [removeStaged]
@@ -677,6 +716,52 @@ export function MessageComposer({
       if (file) void stageUpload(kind, file);
     },
     [stageUpload]
+  );
+
+  const handlePaste = useCallback(
+    (event: React.ClipboardEvent<HTMLTextAreaElement>) => {
+      if (inputsDisabled || busy) return;
+
+      const file = getImageFileFromClipboardItems(event.clipboardData.items);
+      if (!file) return;
+
+      event.preventDefault();
+      void stageUpload('image', file);
+    },
+    [busy, inputsDisabled, stageUpload]
+  );
+
+  const handleDragOver = useCallback(
+    (event: React.DragEvent<HTMLDivElement>) => {
+      const effect = getFileDropEffect(
+        event.dataTransfer.types.includes('Files'),
+        inputsDisabled,
+        busy
+      );
+      if (!effect) return;
+
+      event.preventDefault();
+      event.dataTransfer.dropEffect = effect;
+    },
+    [busy, inputsDisabled]
+  );
+
+  const handleDrop = useCallback(
+    (event: React.DragEvent<HTMLDivElement>) => {
+      const effect = getFileDropEffect(
+        event.dataTransfer.types.includes('Files'),
+        inputsDisabled,
+        busy
+      );
+      if (!effect) return;
+
+      event.preventDefault();
+      if (effect !== 'copy') return;
+
+      const file = getImageFileFromDroppedFiles(event.dataTransfer.files);
+      if (file) void stageUpload('image', file);
+    },
+    [busy, inputsDisabled, stageUpload]
   );
 
   // ---- Voice recording (client-side Ogg/Opus, no server transcode) ---
@@ -700,11 +785,23 @@ export function MessageComposer({
         return;
       }
       setBusy(true);
+      const uploadId = uploadGenerationRef.current + 1;
+      uploadGenerationRef.current = uploadId;
       try {
         const { publicUrl, path } = await uploadAccountMedia(
           CHAT_MEDIA_BUCKET,
           file
         );
+        if (
+          !isCurrentMediaUpload(
+            uploadId,
+            uploadGenerationRef.current,
+            mountedRef.current
+          )
+        ) {
+          removeStaged(path);
+          return;
+        }
         removeStaged(draftRef.current?.path);
         setDraft({
           kind: 'audio',
@@ -714,9 +811,25 @@ export function MessageComposer({
           caption: '',
         });
       } catch (err) {
-        toast.error(err instanceof Error ? err.message : 'Upload failed.');
+        if (
+          isCurrentMediaUpload(
+            uploadId,
+            uploadGenerationRef.current,
+            mountedRef.current
+          )
+        ) {
+          toast.error(err instanceof Error ? err.message : 'Upload failed.');
+        }
       } finally {
-        setBusy(false);
+        if (
+          isCurrentMediaUpload(
+            uploadId,
+            uploadGenerationRef.current,
+            mountedRef.current
+          )
+        ) {
+          setBusy(false);
+        }
       }
     },
     [removeStaged]
@@ -805,9 +918,11 @@ export function MessageComposer({
 
   // Discard GCs the staged object — it was uploaded but never sent.
   const discardDraft = useCallback(() => {
+    if (busy) return;
+    uploadGenerationRef.current += 1;
     removeStaged(draft?.path);
     setDraft(null);
-  }, [draft?.path, removeStaged]);
+  }, [busy, draft?.path, removeStaged]);
 
   const setCaption = useCallback((caption: string) => {
     setDraft((d) => (d ? { ...d, caption } : d));
@@ -816,7 +931,11 @@ export function MessageComposer({
   // ---- Render --------------------------------------------------------
 
   return (
-    <div className="border-border bg-card border-t p-3">
+    <div
+      className="border-border bg-card border-t p-3"
+      onDragOver={handleDragOver}
+      onDrop={handleDrop}
+    >
       {replyTo && (
         <div className="mb-2">
           <ReplyQuote
@@ -1131,6 +1250,7 @@ export function MessageComposer({
               value={text}
               onChange={handleChange}
               onKeyDown={handleKeyDown}
+              onPaste={handlePaste}
               onSelect={syncCaretPosition}
               onClick={() => {
                 syncCaretPosition();
@@ -1287,8 +1407,9 @@ function MediaDraftPreview({
         <button
           type="button"
           onClick={onDiscard}
+          disabled={busy}
           aria-label={t('removeAttachment')}
-          className="text-muted-foreground hover:bg-muted hover:text-foreground rounded p-1"
+          className="text-muted-foreground hover:bg-muted hover:text-foreground rounded p-1 disabled:cursor-not-allowed disabled:opacity-50"
         >
           <X className="h-4 w-4" />
         </button>

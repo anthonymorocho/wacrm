@@ -638,7 +638,7 @@ function InboxPageInner() {
         const stillVisible =
           accountRole &&
           isConversationVisibleToUser(
-            { assigned_agent_id: nextAssignment },
+            { ...activeConversation, assigned_agent_id: nextAssignment },
             accountRole,
             user?.id ?? null,
           );
@@ -675,7 +675,7 @@ function InboxPageInner() {
         const stillVisible =
           accountRole &&
           isConversationVisibleToUser(
-            { assigned_agent_id: assignedAgentId },
+            { ...prev, assigned_agent_id: assignedAgentId },
             accountRole,
             user?.id ?? null,
           );
@@ -686,7 +686,7 @@ function InboxPageInner() {
         transferredIds.has(activeConversation.id) &&
         (!accountRole ||
           !isConversationVisibleToUser(
-            { assigned_agent_id: assignedAgentId },
+            { ...activeConversation, assigned_agent_id: assignedAgentId },
             accountRole,
             user?.id ?? null,
           ))

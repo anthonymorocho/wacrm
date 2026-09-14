@@ -12,6 +12,7 @@ import {
   matchesContactFilters,
   normalizeConversations,
 } from "@/lib/inbox/conversations";
+import type { AccountRole } from "@/lib/auth/roles";
 import { cn } from "@/lib/utils";
 import type { Conversation, ConversationStatus, Profile, Tag } from "@/types";
 import { ArrowRight, CheckCheck, Search, ChevronDown, X } from "lucide-react";
@@ -66,6 +67,17 @@ const STATUS_COLORS: Record<ConversationStatus, string> = {
 type InboxFilter = ConversationStatus | "active" | "queue" | "unread";
 type AssignmentFilter = "owned" | "transferred";
 
+export function getInboxFilterValues(): InboxFilter[] {
+  return ["active", "queue", "unread", "open", "pending", "closed"];
+}
+
+export function shouldApplyAssignmentFilter(
+  accountRole: AccountRole | null,
+  filter: InboxFilter,
+): boolean {
+  return accountRole === "agent" && filter !== "queue";
+}
+
 export function ConversationList({
   activeConversationId,
   onSelect,
@@ -81,18 +93,19 @@ export function ConversationList({
   const { user, accountRole, canSendMessages } = useAuth();
   
   const FILTER_OPTIONS: { label: string; value: InboxFilter }[] = useMemo(() => {
-    const options: { label: string; value: InboxFilter }[] = [
-      { label: t("filterActive"), value: "active" },
-      { label: t("filterUnread"), value: "unread" },
-      { label: t("filterOpen"), value: "open" },
-      { label: t("filterPending"), value: "pending" },
-      { label: t("filterClosed"), value: "closed" },
-    ];
-    if (accountRole !== "agent") {
-      options.splice(1, 0, { label: t("filterQueue"), value: "queue" });
-    }
-    return options;
-  }, [accountRole, t]);
+    const labels: Record<InboxFilter, string> = {
+      active: t("filterActive"),
+      queue: t("filterQueue"),
+      unread: t("filterUnread"),
+      open: t("filterOpen"),
+      pending: t("filterPending"),
+      closed: t("filterClosed"),
+    };
+    return getInboxFilterValues().map((value) => ({
+      label: labels[value],
+      value,
+    }));
+  }, [t]);
 
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<InboxFilter>("active");
@@ -230,7 +243,9 @@ export function ConversationList({
       user?.id ?? null,
     );
 
-    if (accountRole === "agent") {
+    // The shared queue is independent of assignment history. A conversation
+    // released after a transfer still belongs in "En cola" for every role.
+    if (shouldApplyAssignmentFilter(accountRole, filter)) {
       result = result.filter(
         (conversation) =>
           getConversationAssignmentKind(conversation) === assignmentFilter,

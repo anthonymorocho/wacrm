@@ -95,20 +95,29 @@ export function isActiveInboxConversation(
 export function isQueuedInboxConversation(
   conversation: Pick<Conversation, "status" | "assigned_agent_id">,
 ): boolean {
-  return conversation.status !== "closed" && !conversation.assigned_agent_id;
+  return (
+    (conversation.status === "open" || conversation.status === "pending") &&
+    !conversation.assigned_agent_id
+  );
 }
 
 /**
  * Enforce the inbox's visibility boundary in the client as well as in RLS.
- * Owners/admins have the operational overview; agents only see their current
- * assignments; viewers do not participate in the inbox.
+ * Owners/admins have the operational overview; every member can inspect the
+ * active shared queue; assigned work keeps the role/ownership boundary.
  */
 export function isConversationVisibleToUser(
-  conversation: Pick<Conversation, "assigned_agent_id">,
+  conversation: Pick<Conversation, "status" | "assigned_agent_id">,
   role: AccountRole | null,
   userId: string | null,
 ): boolean {
+  // Every account member can inspect the shared queue. Assigned work keeps
+  // the existing role/ownership boundary below.
+  if (!role) return false;
   if (role === "owner" || role === "admin") return true;
+  if (!conversation.assigned_agent_id) {
+    return isQueuedInboxConversation(conversation);
+  }
   return role === "agent" && Boolean(userId) && conversation.assigned_agent_id === userId;
 }
 

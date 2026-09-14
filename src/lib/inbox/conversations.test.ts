@@ -159,22 +159,31 @@ describe("conversation visibility", () => {
       .toHaveLength(2);
   });
 
-  it("lets an agent see only conversations currently assigned to them", () => {
+  it("lets an agent see their assignments and the shared queue", () => {
     const mine = { ...makeConversation(null), assigned_agent_id: "agent-1" };
     const theirs = { ...makeConversation(null), id: "c2", assigned_agent_id: "agent-2" };
     const queued = { ...makeConversation(null), id: "c3" };
 
     expect(isConversationVisibleToUser(mine, "agent", "agent-1")).toBe(true);
     expect(isConversationVisibleToUser(theirs, "agent", "agent-1")).toBe(false);
-    expect(isConversationVisibleToUser(queued, "agent", "agent-1")).toBe(false);
+    expect(isConversationVisibleToUser(queued, "agent", "agent-1")).toBe(true);
     expect(filterVisibleConversations([mine, theirs, queued], "agent", "agent-1"))
-      .toEqual([mine]);
+      .toEqual([mine, queued]);
   });
 
-  it("does not expose inbox conversations to viewer roles", () => {
+  it("lets viewer roles see queued conversations but not assigned conversations", () => {
     const mine = { ...makeConversation(null), assigned_agent_id: "agent-1" };
+    const queued = makeConversation(null);
+    const closedQueued = { ...queued, id: "c3", status: "closed" as const };
+
     expect(isConversationVisibleToUser(mine, "viewer", "viewer-1")).toBe(false);
-    expect(filterVisibleConversations([mine], "viewer", "viewer-1")).toEqual([]);
+    expect(isConversationVisibleToUser(queued, "viewer", "viewer-1")).toBe(true);
+    expect(isConversationVisibleToUser(closedQueued, "viewer", "viewer-1")).toBe(false);
+    expect(isConversationVisibleToUser(closedQueued, "admin", "admin-1")).toBe(true);
+    expect(filterVisibleConversations([mine, queued], "viewer", "viewer-1"))
+      .toEqual([queued]);
+    expect(filterVisibleConversations([queued, closedQueued], "viewer", "viewer-1"))
+      .toEqual([queued]);
   });
 });
 

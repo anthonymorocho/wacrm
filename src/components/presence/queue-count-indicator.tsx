@@ -9,24 +9,31 @@ import { loadQueueCount } from "@/lib/dashboard/queries";
 
 const REFRESH_INTERVAL_MS = 30_000;
 
+export function shouldShowQueueCount(
+  profileLoading: boolean,
+  accountId: string | null,
+): accountId is string {
+  return !profileLoading && Boolean(accountId);
+}
+
 /** Compact account-scoped queue count for the global dashboard header. */
 export function QueueCountIndicator() {
   const t = useTranslations("Header");
-  const { accountId, canSendMessages, profileLoading } = useAuth();
+  const { accountId, profileLoading } = useAuth();
   const [queueCount, setQueueCount] = useState<number | null>(null);
 
   const refresh = useCallback(async () => {
-    if (!accountId || !canSendMessages) return;
+    if (!accountId) return;
     try {
       const count = await loadQueueCount(createClient(), accountId);
       setQueueCount(count);
     } catch (error) {
       console.error("[QueueCountIndicator] queue count failed:", error);
     }
-  }, [accountId, canSendMessages]);
+  }, [accountId]);
 
   useEffect(() => {
-    if (profileLoading || !accountId || !canSendMessages) return;
+    if (!shouldShowQueueCount(profileLoading, accountId)) return;
 
     void loadQueueCount(createClient(), accountId)
       .then((count) => setQueueCount(count))
@@ -45,9 +52,9 @@ export function QueueCountIndicator() {
       window.removeEventListener("focus", refreshWhenVisible);
       document.removeEventListener("visibilitychange", refreshWhenVisible);
     };
-  }, [accountId, canSendMessages, profileLoading, refresh]);
+  }, [accountId, profileLoading, refresh]);
 
-  if (profileLoading || !accountId || !canSendMessages) return null;
+  if (!shouldShowQueueCount(profileLoading, accountId)) return null;
 
   return (
     <div

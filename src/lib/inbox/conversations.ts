@@ -1,5 +1,5 @@
-import type { Conversation, Contact, Tag } from "@/types";
-import type { AccountRole } from "@/lib/auth/roles";
+import type { Conversation, Contact, Tag } from '@/types';
+import type { AccountRole } from '@/lib/auth/roles';
 
 /**
  * Conversation select that embeds the contact plus its tags, so the Inbox
@@ -8,11 +8,11 @@ import type { AccountRole } from "@/lib/auth/roles";
  * flattens them onto `contact.tags`.
  */
 export const CONVERSATION_SELECT =
-  "*, contact:contacts(*, contact_tags(tags(*)))";
+  '*, contact:contacts(*, contact_tags(tags(*)))';
 
 /** Raw shape returned by {@link CONVERSATION_SELECT} before flattening. */
 type RawContact = Contact & { contact_tags?: { tags: Tag | null }[] };
-type RawConversation = Omit<Conversation, "contact"> & {
+type RawConversation = Omit<Conversation, 'contact'> & {
   contact?: RawContact | null;
 };
 
@@ -38,7 +38,7 @@ export function normalizeConversation(raw: RawConversation): Conversation {
 }
 
 export function normalizeConversations(
-  rows: RawConversation[],
+  rows: RawConversation[]
 ): Conversation[] {
   return rows.map(normalizeConversation);
 }
@@ -52,7 +52,7 @@ export function updateConversationActivity(
   conversations: Conversation[],
   conversationId: string,
   activityAt: string,
-  patch: Partial<Conversation> = {},
+  patch: Partial<Conversation> = {}
 ): Conversation[] {
   const index = conversations.findIndex((item) => item.id === conversationId);
   if (index < 0) return conversations;
@@ -60,7 +60,7 @@ export function updateConversationActivity(
   const current = conversations[index];
   const incomingTime = Date.parse(activityAt);
   const currentTime = Date.parse(
-    current.last_message_at ?? current.updated_at ?? current.created_at,
+    current.last_message_at ?? current.updated_at ?? current.created_at
   );
   if (
     Number.isFinite(incomingTime) &&
@@ -75,7 +75,11 @@ export function updateConversationActivity(
     ...patch,
     last_message_at: activityAt,
   };
-  return [updated, ...conversations.slice(0, index), ...conversations.slice(index + 1)];
+  return [
+    updated,
+    ...conversations.slice(0, index),
+    ...conversations.slice(index + 1),
+  ];
 }
 
 /**
@@ -83,20 +87,19 @@ export function updateConversationActivity(
  * have an agent. Unassigned work belongs in the explicit queue view.
  */
 export function isActiveInboxConversation(
-  conversation: Pick<Conversation, "status" | "assigned_agent_id">,
+  conversation: Pick<Conversation, 'status' | 'assigned_agent_id'>
 ): boolean {
   return (
-    conversation.status !== "closed" &&
-    Boolean(conversation.assigned_agent_id)
+    conversation.status !== 'closed' && Boolean(conversation.assigned_agent_id)
   );
 }
 
 /** Queued work is open/pending and waiting for an eligible agent. */
 export function isQueuedInboxConversation(
-  conversation: Pick<Conversation, "status" | "assigned_agent_id">,
+  conversation: Pick<Conversation, 'status' | 'assigned_agent_id'>
 ): boolean {
   return (
-    (conversation.status === "open" || conversation.status === "pending") &&
+    (conversation.status === 'open' || conversation.status === 'pending') &&
     !conversation.assigned_agent_id
   );
 }
@@ -107,41 +110,47 @@ export function isQueuedInboxConversation(
  * active shared queue; assigned work keeps the role/ownership boundary.
  */
 export function isConversationVisibleToUser(
-  conversation: Pick<Conversation, "status" | "assigned_agent_id">,
+  conversation: Pick<Conversation, 'status' | 'assigned_agent_id'>,
   role: AccountRole | null,
-  userId: string | null,
+  userId: string | null
 ): boolean {
   // Every account member can inspect the shared queue. Assigned work keeps
   // the existing role/ownership boundary below.
   if (!role) return false;
-  if (role === "owner" || role === "admin") return true;
+  if (role === 'owner' || role === 'admin') return true;
   if (!conversation.assigned_agent_id) {
     return isQueuedInboxConversation(conversation);
   }
-  return role === "agent" && Boolean(userId) && conversation.assigned_agent_id === userId;
+  return (
+    role === 'agent' &&
+    Boolean(userId) &&
+    conversation.assigned_agent_id === userId
+  );
 }
 
 export function filterVisibleConversations(
   conversations: Conversation[],
   role: AccountRole | null,
-  userId: string | null,
+  userId: string | null
 ): Conversation[] {
   return conversations.filter((conversation) =>
-    isConversationVisibleToUser(conversation, role, userId),
+    isConversationVisibleToUser(conversation, role, userId)
   );
 }
 
-export type ConversationAssignmentKind = "owned" | "transferred";
+export type ConversationAssignmentKind = 'owned' | 'transferred';
 
 /**
- * Assignment history is intentionally sticky. A transferred conversation
- * remains in the transferred bucket even when it is returned to its initial
- * agent, so the inbox preserves the hand-off audit signal.
+ * A transfer label applies only to the active conversation cycle. Closed
+ * conversations are shown as owned so a later inbound message starts as a
+ * fresh client cycle; a new transfer can classify it again.
  */
 export function getConversationAssignmentKind(
-  conversation: Pick<Conversation, "was_transferred">,
+  conversation: Pick<Conversation, 'status' | 'was_transferred'>
 ): ConversationAssignmentKind {
-  return conversation.was_transferred ? "transferred" : "owned";
+  return conversation.status !== 'closed' && conversation.was_transferred
+    ? 'transferred'
+    : 'owned';
 }
 
 export interface ContactFilters {
@@ -158,7 +167,7 @@ export interface ContactFilters {
  */
 export function matchesContactFilters(
   conversation: Conversation,
-  { tagIds, company }: ContactFilters,
+  { tagIds, company }: ContactFilters
 ): boolean {
   if (tagIds.length > 0) {
     const contactTagIds = conversation.contact?.tags ?? [];

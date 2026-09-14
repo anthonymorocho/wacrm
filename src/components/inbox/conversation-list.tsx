@@ -1,8 +1,8 @@
-"use client";
+'use client';
 
-import { useState, useEffect, useCallback, useMemo, useRef } from "react";
-import { createClient } from "@/lib/supabase/client";
-import { useAuth } from "@/hooks/use-auth";
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { createClient } from '@/lib/supabase/client';
+import { useAuth } from '@/hooks/use-auth';
 import {
   CONVERSATION_SELECT,
   filterVisibleConversations,
@@ -11,28 +11,28 @@ import {
   isQueuedInboxConversation,
   matchesContactFilters,
   normalizeConversations,
-} from "@/lib/inbox/conversations";
-import type { AccountRole } from "@/lib/auth/roles";
-import { cn } from "@/lib/utils";
-import type { Conversation, ConversationStatus, Profile, Tag } from "@/types";
-import { ArrowRight, CheckCheck, Search, ChevronDown, X } from "lucide-react";
-import { formatDistanceToNow } from "date-fns";
-import { useTranslations } from "next-intl";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
-import { toast } from "sonner";
+} from '@/lib/inbox/conversations';
+import type { AccountRole } from '@/lib/auth/roles';
+import { cn } from '@/lib/utils';
+import type { Conversation, ConversationStatus, Profile, Tag } from '@/types';
+import { ArrowRight, CheckCheck, Search, ChevronDown, X } from 'lucide-react';
+import { formatDistanceToNow } from 'date-fns';
+import { useTranslations } from 'next-intl';
+import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
+import { toast } from 'sonner';
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { BulkTransferDialog } from "./bulk-transfer-dialog";
-import { BulkCloseDialog } from "./bulk-close-dialog";
-import { getBulkDialogKey } from "@/lib/inbox/dialog-keys";
+} from '@/components/ui/dropdown-menu';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { BulkTransferDialog } from './bulk-transfer-dialog';
+import { BulkCloseDialog } from './bulk-close-dialog';
+import { getBulkDialogKey } from '@/lib/inbox/dialog-keys';
 
 interface ConversationListProps {
   activeConversationId: string | null;
@@ -41,11 +41,11 @@ interface ConversationListProps {
   onConversationsLoaded: (conversations: Conversation[]) => void;
   onBulkAssignChange: (
     conversationIds: string[],
-    assignedAgentId: string,
+    assignedAgentId: string
   ) => void;
   onBulkStatusChange: (
     conversationIds: string[],
-    status: ConversationStatus,
+    status: ConversationStatus
   ) => void;
   /**
    * Increment to force the fetch effect below to refire. The parent
@@ -57,25 +57,23 @@ interface ConversationListProps {
 }
 
 const STATUS_COLORS: Record<ConversationStatus, string> = {
-  open: "bg-primary",
-  pending: "bg-amber-500",
-  closed: "bg-muted-foreground",
+  open: 'bg-primary',
+  pending: 'bg-amber-500',
+  closed: 'bg-muted-foreground',
 };
 
-
-
-type InboxFilter = ConversationStatus | "active" | "queue" | "unread";
-type AssignmentFilter = "owned" | "transferred";
+type InboxFilter = ConversationStatus | 'active' | 'queue' | 'unread';
+type AssignmentFilter = 'owned' | 'transferred';
 
 export function getInboxFilterValues(): InboxFilter[] {
-  return ["active", "queue", "unread", "open", "pending", "closed"];
+  return ['active', 'queue', 'unread', 'open', 'pending', 'closed'];
 }
 
 export function shouldApplyAssignmentFilter(
   accountRole: AccountRole | null,
-  filter: InboxFilter,
+  filter: InboxFilter
 ): boolean {
-  return accountRole === "agent" && filter !== "queue";
+  return accountRole === 'agent' && filter !== 'queue';
 }
 
 export function ConversationList({
@@ -87,30 +85,31 @@ export function ConversationList({
   onBulkStatusChange,
   resyncToken = 0,
 }: ConversationListProps) {
-  const t = useTranslations("Inbox.conversationList");
-  const tTransfer = useTranslations("Inbox.bulkTransfer");
-  const tClose = useTranslations("Inbox.bulkClose");
+  const t = useTranslations('Inbox.conversationList');
+  const tTransfer = useTranslations('Inbox.bulkTransfer');
+  const tClose = useTranslations('Inbox.bulkClose');
   const { user, accountRole, canSendMessages } = useAuth();
-  
-  const FILTER_OPTIONS: { label: string; value: InboxFilter }[] = useMemo(() => {
-    const labels: Record<InboxFilter, string> = {
-      active: t("filterActive"),
-      queue: t("filterQueue"),
-      unread: t("filterUnread"),
-      open: t("filterOpen"),
-      pending: t("filterPending"),
-      closed: t("filterClosed"),
-    };
-    return getInboxFilterValues().map((value) => ({
-      label: labels[value],
-      value,
-    }));
-  }, [t]);
 
-  const [search, setSearch] = useState("");
-  const [filter, setFilter] = useState<InboxFilter>("active");
+  const FILTER_OPTIONS: { label: string; value: InboxFilter }[] =
+    useMemo(() => {
+      const labels: Record<InboxFilter, string> = {
+        active: t('filterActive'),
+        queue: t('filterQueue'),
+        unread: t('filterUnread'),
+        open: t('filterOpen'),
+        pending: t('filterPending'),
+        closed: t('filterClosed'),
+      };
+      return getInboxFilterValues().map((value) => ({
+        label: labels[value],
+        value,
+      }));
+    }, [t]);
+
+  const [search, setSearch] = useState('');
+  const [filter, setFilter] = useState<InboxFilter>('active');
   const [assignmentFilter, setAssignmentFilter] =
-    useState<AssignmentFilter>("owned");
+    useState<AssignmentFilter>('owned');
   const [loading, setLoading] = useState(true);
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [selectedConversationIds, setSelectedConversationIds] = useState<
@@ -150,15 +149,15 @@ export function ConversationList({
 
     (async () => {
       const { data, error } = await supabase
-        .from("conversations")
+        .from('conversations')
         .select(CONVERSATION_SELECT)
-        .order("last_message_at", { ascending: false });
+        .order('last_message_at', { ascending: false });
 
       if (cancelled) return;
 
       if (error) {
         // Supabase errors have non-enumerable properties — log fields explicitly
-        console.error("Failed to fetch conversations:", {
+        console.error('Failed to fetch conversations:', {
           message: error.message,
           details: error.details,
           hint: error.hint,
@@ -186,7 +185,7 @@ export function ConversationList({
     const supabase = createClient();
     let cancelled = false;
     (async () => {
-      const { data } = await supabase.from("tags").select("*").order("name");
+      const { data } = await supabase.from('tags').select('*').order('name');
       if (!cancelled && data) setTags(data as Tag[]);
     })();
     return () => {
@@ -204,13 +203,13 @@ export function ConversationList({
     let cancelled = false;
 
     supabase
-      .from("profiles")
-      .select("*")
-      .order("full_name")
+      .from('profiles')
+      .select('*')
+      .order('full_name')
       .then(({ data, error }) => {
         if (cancelled) return;
         if (error) {
-          console.error("Failed to fetch Inbox assignees:", error);
+          console.error('Failed to fetch Inbox assignees:', error);
           return;
         }
         setProfiles((data as Profile[]) ?? []);
@@ -240,7 +239,7 @@ export function ConversationList({
     let result = filterVisibleConversations(
       conversations,
       accountRole,
-      user?.id ?? null,
+      user?.id ?? null
     );
 
     // The shared queue is independent of assignment history. A conversation
@@ -248,23 +247,23 @@ export function ConversationList({
     if (shouldApplyAssignmentFilter(accountRole, filter)) {
       result = result.filter(
         (conversation) =>
-          getConversationAssignmentKind(conversation) === assignmentFilter,
+          getConversationAssignmentKind(conversation) === assignmentFilter
       );
     }
 
-    if (filter === "active") {
+    if (filter === 'active') {
       result = result.filter(isActiveInboxConversation);
-    } else if (filter === "queue") {
+    } else if (filter === 'queue') {
       result = result.filter(isQueuedInboxConversation);
-    } else if (filter === "unread") {
+    } else if (filter === 'unread') {
       result = result.filter(
-        (c) => isActiveInboxConversation(c) && c.unread_count > 0,
+        (c) => isActiveInboxConversation(c) && c.unread_count > 0
       );
-    } else if (filter === "closed") {
-      result = result.filter((c) => c.status === "closed");
+    } else if (filter === 'closed') {
+      result = result.filter((c) => c.status === 'closed');
     } else {
       result = result.filter(
-        (c) => c.status === filter && isActiveInboxConversation(c),
+        (c) => c.status === filter && isActiveInboxConversation(c)
       );
     }
 
@@ -281,15 +280,24 @@ export function ConversationList({
     if (search.trim()) {
       const q = search.toLowerCase();
       result = result.filter((c) => {
-        const name = c.contact?.name?.toLowerCase() ?? "";
-        const phone = c.contact?.phone?.toLowerCase() ?? "";
-        const lastMsg = c.last_message_text?.toLowerCase() ?? "";
+        const name = c.contact?.name?.toLowerCase() ?? '';
+        const phone = c.contact?.phone?.toLowerCase() ?? '';
+        const lastMsg = c.last_message_text?.toLowerCase() ?? '';
         return name.includes(q) || phone.includes(q) || lastMsg.includes(q);
       });
     }
 
     return result;
-  }, [accountRole, assignmentFilter, conversations, filter, search, selectedTagIds, selectedCompany, user?.id]);
+  }, [
+    accountRole,
+    assignmentFilter,
+    conversations,
+    filter,
+    search,
+    selectedTagIds,
+    selectedCompany,
+    user?.id,
+  ]);
 
   const profilesByUserId = useMemo(() => {
     const result = new Map<string, Profile>();
@@ -301,39 +309,40 @@ export function ConversationList({
     () =>
       filtered.filter(
         (conversation) =>
-          conversation.status !== "closed" &&
-          conversation.assigned_agent_id === user?.id,
+          conversation.status !== 'closed' &&
+          conversation.assigned_agent_id === user?.id
       ),
-    [filtered, user?.id],
+    [filtered, user?.id]
   );
 
   const selectableIds = useMemo(
-    () => new Set(selectableConversations.map((conversation) => conversation.id)),
-    [selectableConversations],
+    () =>
+      new Set(selectableConversations.map((conversation) => conversation.id)),
+    [selectableConversations]
   );
   const selectedVisibleCount = selectedConversationIds.filter((id) =>
-    selectableIds.has(id),
+    selectableIds.has(id)
   ).length;
   const selectedVisibleIds = selectedConversationIds.filter((id) =>
-    selectableIds.has(id),
+    selectableIds.has(id)
   );
   const allSelectableSelected =
     selectableConversations.length > 0 &&
     selectableConversations.every((conversation) =>
-      selectedConversationIds.includes(conversation.id),
+      selectedConversationIds.includes(conversation.id)
     );
 
   const toggleConversationSelection = useCallback((conversationId: string) => {
     setSelectedConversationIds((previous) =>
       previous.includes(conversationId)
         ? previous.filter((id) => id !== conversationId)
-        : [...previous, conversationId],
+        : [...previous, conversationId]
     );
   }, []);
 
   const toggleSelectAll = useCallback(() => {
     const visibleIds = selectableConversations.map(
-      (conversation) => conversation.id,
+      (conversation) => conversation.id
     );
     setSelectedConversationIds((previous) => {
       if (visibleIds.every((id) => previous.includes(id))) {
@@ -349,9 +358,9 @@ export function ConversationList({
 
       setTransferring(true);
       try {
-        const response = await fetch("/api/conversations/bulk-transfer", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
+        const response = await fetch('/api/conversations/bulk-transfer', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             conversation_ids: selectedVisibleIds,
             target_agent_id: targetAgentId,
@@ -364,31 +373,29 @@ export function ConversationList({
 
         const transferredIds = Array.isArray(payload?.conversation_ids)
           ? payload.conversation_ids.filter(
-              (id: unknown): id is string => typeof id === "string",
+              (id: unknown): id is string => typeof id === 'string'
             )
           : [];
         onBulkAssignChange(transferredIds, targetAgentId);
         setSelectedConversationIds((previous) =>
-          previous.filter((id) => !transferredIds.includes(id)),
+          previous.filter((id) => !transferredIds.includes(id))
         );
         setTransferDialogOpen(false);
 
         if (transferredIds.length > 0) {
-          toast.success(
-            tTransfer("success", { count: transferredIds.length }),
-          );
+          toast.success(tTransfer('success', { count: transferredIds.length }));
         } else {
-          toast.info(tTransfer("noChanges"));
+          toast.info(tTransfer('noChanges'));
         }
       } catch (error) {
         toast.error(
-          error instanceof Error ? error.message : tTransfer("error"),
+          error instanceof Error ? error.message : tTransfer('error')
         );
       } finally {
         setTransferring(false);
       }
     },
-    [onBulkAssignChange, selectedVisibleIds, tTransfer, transferring],
+    [onBulkAssignChange, selectedVisibleIds, tTransfer, transferring]
   );
 
   const handleBulkClose = useCallback(async () => {
@@ -396,9 +403,9 @@ export function ConversationList({
 
     setClosing(true);
     try {
-      const response = await fetch("/api/conversations/bulk-close", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
+      const response = await fetch('/api/conversations/bulk-close', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ conversation_ids: selectedVisibleIds }),
       });
       const payload = await response.json().catch(() => ({}));
@@ -408,24 +415,22 @@ export function ConversationList({
 
       const closedIds = Array.isArray(payload?.conversation_ids)
         ? payload.conversation_ids.filter(
-            (id: unknown): id is string => typeof id === "string",
+            (id: unknown): id is string => typeof id === 'string'
           )
         : [];
-      onBulkStatusChange(closedIds, "closed");
+      onBulkStatusChange(closedIds, 'closed');
       setSelectedConversationIds((previous) =>
-        previous.filter((id) => !closedIds.includes(id)),
+        previous.filter((id) => !closedIds.includes(id))
       );
       setCloseDialogOpen(false);
 
       if (closedIds.length > 0) {
-        toast.success(tClose("success", { count: closedIds.length }));
+        toast.success(tClose('success', { count: closedIds.length }));
       } else {
-        toast.info(tClose("noChanges"));
+        toast.info(tClose('noChanges'));
       }
     } catch (error) {
-      toast.error(
-        error instanceof Error ? error.message : tClose("error"),
-      );
+      toast.error(error instanceof Error ? error.message : tClose('error'));
     } finally {
       setClosing(false);
     }
@@ -442,7 +447,8 @@ export function ConversationList({
     setSelectedCompany(null);
   }, []);
 
-  const hasContactFilters = selectedTagIds.length > 0 || selectedCompany !== null;
+  const hasContactFilters =
+    selectedTagIds.length > 0 || selectedCompany !== null;
 
   const handleSearchChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -464,26 +470,26 @@ export function ConversationList({
     // w-full on mobile so the list occupies the whole viewport when it's
     // the single pane showing; fixed 320px on desktop where it shares the
     // row with the thread + contact sidebar.
-    <div className="flex h-full w-full flex-col border-r border-border bg-card lg:w-80">
+    <div className="border-border bg-card flex h-full w-full flex-col border-r lg:w-80">
       {/* Search + Filter */}
-      <div className="space-y-2 border-b border-border p-3">
+      <div className="border-border space-y-2 border-b p-3">
         <div className="relative">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Search className="text-muted-foreground absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
           <Input
             value={search}
             onChange={handleSearchChange}
-            placeholder={t("searchPlaceholder")}
-            className="border-border bg-muted pl-9 text-sm text-foreground placeholder-muted-foreground focus:border-primary/50"
+            placeholder={t('searchPlaceholder')}
+            className="border-border bg-muted text-foreground placeholder-muted-foreground focus:border-primary/50 pl-9 text-sm"
           />
         </div>
 
-        {accountRole === "agent" && (
+        {accountRole === 'agent' && (
           <div
-            className="flex items-center gap-1 rounded-md bg-muted p-1"
+            className="bg-muted flex items-center gap-1 rounded-md p-1"
             role="tablist"
-            aria-label={t("assignmentGroups")}
+            aria-label={t('assignmentGroups')}
           >
-            {(["owned", "transferred"] as const).map((kind) => (
+            {(['owned', 'transferred'] as const).map((kind) => (
               <button
                 key={kind}
                 type="button"
@@ -491,13 +497,13 @@ export function ConversationList({
                 aria-selected={assignmentFilter === kind}
                 onClick={() => setAssignmentFilter(kind)}
                 className={cn(
-                  "flex-1 rounded px-2 py-1 text-xs transition-colors",
+                  'flex-1 rounded px-2 py-1 text-xs transition-colors',
                   assignmentFilter === kind
-                    ? "bg-card font-medium text-foreground shadow-sm"
-                    : "text-muted-foreground hover:text-foreground",
+                    ? 'bg-card text-foreground font-medium shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground'
                 )}
               >
-                {kind === "owned" ? t("owned") : t("transferred")}
+                {kind === 'owned' ? t('owned') : t('transferred')}
               </button>
             ))}
           </div>
@@ -505,9 +511,9 @@ export function ConversationList({
 
         <div className="flex flex-wrap items-center gap-1">
           <DropdownMenu>
-            <DropdownMenuTrigger className="inline-flex items-center justify-center h-7 gap-1 px-2 text-xs text-muted-foreground hover:text-foreground rounded-md hover:bg-muted">
-                {activeFilter?.label ?? t("filterActive")}
-                <ChevronDown className="h-3 w-3" />
+            <DropdownMenuTrigger className="text-muted-foreground hover:text-foreground hover:bg-muted inline-flex h-7 items-center justify-center gap-1 rounded-md px-2 text-xs">
+              {activeFilter?.label ?? t('filterActive')}
+              <ChevronDown className="h-3 w-3" />
             </DropdownMenuTrigger>
             <DropdownMenuContent
               align="start"
@@ -518,10 +524,10 @@ export function ConversationList({
                   key={opt.value}
                   onClick={() => setFilter(opt.value)}
                   className={cn(
-                    "text-sm",
+                    'text-sm',
                     filter === opt.value
-                      ? "text-primary"
-                      : "text-popover-foreground"
+                      ? 'text-primary'
+                      : 'text-popover-foreground'
                   )}
                 >
                   {opt.label}
@@ -534,15 +540,15 @@ export function ConversationList({
             <DropdownMenu>
               <DropdownMenuTrigger
                 className={cn(
-                  "inline-flex items-center justify-center h-7 gap-1 px-2 text-xs rounded-md hover:bg-muted",
+                  'hover:bg-muted inline-flex h-7 items-center justify-center gap-1 rounded-md px-2 text-xs',
                   selectedTagIds.length > 0
-                    ? "text-primary"
-                    : "text-muted-foreground hover:text-foreground"
+                    ? 'text-primary'
+                    : 'text-muted-foreground hover:text-foreground'
                 )}
               >
-                {t("tags")}
+                {t('tags')}
                 {selectedTagIds.length > 0 && (
-                  <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-bold text-primary-foreground">
+                  <span className="bg-primary text-primary-foreground flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-bold">
                     {selectedTagIds.length}
                   </span>
                 )}
@@ -550,14 +556,14 @@ export function ConversationList({
               </DropdownMenuTrigger>
               <DropdownMenuContent
                 align="start"
-                className="max-h-64 w-56 border-border bg-popover"
+                className="border-border bg-popover max-h-64 w-56"
               >
                 {tags.map((t) => (
                   <DropdownMenuCheckboxItem
                     key={t.id}
                     checked={selectedTagIds.includes(t.id)}
                     onCheckedChange={() => toggleTag(t.id)}
-                    className="text-sm text-popover-foreground"
+                    className="text-popover-foreground text-sm"
                   >
                     <span className="flex items-center gap-2">
                       <span
@@ -576,39 +582,41 @@ export function ConversationList({
             <DropdownMenu>
               <DropdownMenuTrigger
                 className={cn(
-                  "inline-flex max-w-40 items-center justify-center h-7 gap-1 px-2 text-xs rounded-md hover:bg-muted",
+                  'hover:bg-muted inline-flex h-7 max-w-40 items-center justify-center gap-1 rounded-md px-2 text-xs',
                   selectedCompany
-                    ? "text-primary"
-                    : "text-muted-foreground hover:text-foreground"
+                    ? 'text-primary'
+                    : 'text-muted-foreground hover:text-foreground'
                 )}
               >
-                <span className="truncate">{selectedCompany ?? t("company")}</span>
+                <span className="truncate">
+                  {selectedCompany ?? t('company')}
+                </span>
                 <ChevronDown className="h-3 w-3 shrink-0" />
               </DropdownMenuTrigger>
               <DropdownMenuContent
                 align="start"
-                className="max-h-64 w-56 border-border bg-popover"
+                className="border-border bg-popover max-h-64 w-56"
               >
                 <DropdownMenuItem
                   onClick={() => setSelectedCompany(null)}
                   className={cn(
-                    "text-sm",
+                    'text-sm',
                     selectedCompany === null
-                      ? "text-primary"
-                      : "text-popover-foreground"
+                      ? 'text-primary'
+                      : 'text-popover-foreground'
                   )}
                 >
-                  {t("allCompanies")}
+                  {t('allCompanies')}
                 </DropdownMenuItem>
                 {companies.map((co) => (
                   <DropdownMenuItem
                     key={co}
                     onClick={() => setSelectedCompany(co)}
                     className={cn(
-                      "text-sm",
+                      'text-sm',
                       selectedCompany === co
-                        ? "text-primary"
-                        : "text-popover-foreground"
+                        ? 'text-primary'
+                        : 'text-popover-foreground'
                     )}
                   >
                     <span className="truncate">{co}</span>
@@ -623,22 +631,20 @@ export function ConversationList({
           <div className="flex items-center gap-2 pt-1">
             <Checkbox
               checked={allSelectableSelected}
-              indeterminate={
-                selectedVisibleCount > 0 && !allSelectableSelected
-              }
+              indeterminate={selectedVisibleCount > 0 && !allSelectableSelected}
               onCheckedChange={toggleSelectAll}
               aria-label={
                 allSelectableSelected
-                  ? tTransfer("clearSelection")
-                  : tTransfer("selectAll")
+                  ? tTransfer('clearSelection')
+                  : tTransfer('selectAll')
               }
             />
-            <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
+            <span className="text-muted-foreground min-w-0 flex-1 truncate text-xs">
               {selectedVisibleCount > 0
-                ? tTransfer("selectedCount", {
+                ? tTransfer('selectedCount', {
                     count: selectedVisibleCount,
                   })
-                : tTransfer("selectMine")}
+                : tTransfer('selectMine')}
             </span>
             {selectedVisibleCount > 0 && (
               <>
@@ -647,20 +653,20 @@ export function ConversationList({
                   variant="outline"
                   size="sm"
                   onClick={() => setCloseDialogOpen(true)}
-                  className="border-border text-xs text-popover-foreground hover:bg-muted"
+                  className="border-border text-popover-foreground hover:bg-muted text-xs"
                 >
                   <CheckCheck className="h-3.5 w-3.5" />
-                  {tClose("action")}
+                  {tClose('action')}
                 </Button>
                 <Button
                   type="button"
                   variant="outline"
                   size="sm"
                   onClick={() => setTransferDialogOpen(true)}
-                  className="border-border text-xs text-popover-foreground hover:bg-muted"
+                  className="border-border text-popover-foreground hover:bg-muted text-xs"
                 >
                   <ArrowRight className="h-3.5 w-3.5" />
-                  {tTransfer("transfer")}
+                  {tTransfer('transfer')}
                 </Button>
               </>
             )}
@@ -675,13 +681,17 @@ export function ConversationList({
                 <button
                   key={id}
                   onClick={() => toggleTag(id)}
-                  className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[11px] text-foreground hover:bg-muted/70"
+                  className="bg-muted text-foreground hover:bg-muted/70 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px]"
                 >
                   <span
                     className="h-1.5 w-1.5 shrink-0 rounded-full"
-                    style={{ backgroundColor: tag?.color ?? "var(--muted-foreground)" }}
+                    style={{
+                      backgroundColor: tag?.color ?? 'var(--muted-foreground)',
+                    }}
                   />
-                  <span className="max-w-24 truncate">{tag?.name ?? t("tags")}</span>
+                  <span className="max-w-24 truncate">
+                    {tag?.name ?? t('tags')}
+                  </span>
                   <X className="h-3 w-3" />
                 </button>
               );
@@ -689,7 +699,7 @@ export function ConversationList({
             {selectedCompany && (
               <button
                 onClick={() => setSelectedCompany(null)}
-                className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[11px] text-foreground hover:bg-muted/70"
+                className="bg-muted text-foreground hover:bg-muted/70 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px]"
               >
                 <span className="max-w-24 truncate">{selectedCompany}</span>
                 <X className="h-3 w-3" />
@@ -697,9 +707,9 @@ export function ConversationList({
             )}
             <button
               onClick={clearContactFilters}
-              className="px-1 text-[11px] text-muted-foreground hover:text-foreground"
+              className="text-muted-foreground hover:text-foreground px-1 text-[11px]"
             >
-              {t("clearAll")}
+              {t('clearAll')}
             </button>
           </div>
         )}
@@ -714,11 +724,13 @@ export function ConversationList({
       <ScrollArea className="min-h-0 flex-1">
         {loading ? (
           <div className="flex items-center justify-center py-12">
-            <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+            <div className="border-primary h-5 w-5 animate-spin rounded-full border-2 border-t-transparent" />
           </div>
         ) : filtered.length === 0 ? (
           <div className="px-4 py-12 text-center">
-            <p className="text-sm text-muted-foreground">{t("noConversations")}</p>
+            <p className="text-muted-foreground text-sm">
+              {t('noConversations')}
+            </p>
           </div>
         ) : (
           <div className="flex flex-col">
@@ -731,7 +743,7 @@ export function ConversationList({
                 t={t}
                 selectable={
                   canSendMessages &&
-                  conv.status !== "closed" &&
+                  conv.status !== 'closed' &&
                   conv.assigned_agent_id === user?.id
                 }
                 selected={selectedConversationIds.includes(conv.id)}
@@ -748,7 +760,7 @@ export function ConversationList({
       </ScrollArea>
 
       <BulkTransferDialog
-        key={getBulkDialogKey("transfer", transferDialogOpen)}
+        key={getBulkDialogKey('transfer', transferDialogOpen)}
         open={transferDialogOpen}
         onOpenChange={setTransferDialogOpen}
         selectedCount={selectedConversationIds.length}
@@ -758,7 +770,7 @@ export function ConversationList({
         onConfirm={(targetAgentId) => void handleBulkTransfer(targetAgentId)}
       />
       <BulkCloseDialog
-        key={getBulkDialogKey("close", closeDialogOpen)}
+        key={getBulkDialogKey('close', closeDialogOpen)}
         open={closeDialogOpen}
         onOpenChange={setCloseDialogOpen}
         selectedCount={selectedConversationIds.length}
@@ -791,7 +803,7 @@ function ConversationItem({
   assignee,
 }: ConversationItemProps) {
   const contact = conversation.contact;
-  const displayName = contact?.name || contact?.phone || t("unknown");
+  const displayName = contact?.name || contact?.phone || t('unknown');
   const initials = displayName.charAt(0).toUpperCase();
 
   const handleClick = useCallback(() => {
@@ -802,13 +814,13 @@ function ConversationItem({
     ? formatDistanceToNow(new Date(conversation.last_message_at), {
         addSuffix: false,
       })
-    : "";
+    : '';
 
   return (
     <div
       className={cn(
-        "flex w-full items-start gap-2 px-3 py-3 transition-colors hover:bg-muted/50",
-        isActive && "border-l-2 border-primary bg-muted/70",
+        'hover:bg-muted/50 flex w-full items-start gap-2 px-3 py-3 transition-colors',
+        isActive && 'border-primary bg-muted/70 border-l-2'
       )}
     >
       {selectable && (
@@ -826,7 +838,7 @@ function ConversationItem({
         className="flex min-w-0 flex-1 items-start gap-3 text-left"
       >
         {/* Avatar */}
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted text-sm font-medium text-foreground">
+        <div className="bg-muted text-foreground flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-medium">
           {contact?.avatar_url ? (
             <img
               src={contact.avatar_url}
@@ -841,38 +853,40 @@ function ConversationItem({
         {/* Content */}
         <div className="min-w-0 flex-1">
           <div className="flex items-center justify-between gap-2">
-            <span className="truncate text-sm font-medium text-foreground">
+            <span className="text-foreground truncate text-sm font-medium">
               {displayName}
             </span>
-            <span className="shrink-0 text-[10px] text-muted-foreground">{timeAgo}</span>
+            <span className="text-muted-foreground shrink-0 text-[10px]">
+              {timeAgo}
+            </span>
           </div>
           <div className="mt-0.5 flex items-center justify-between gap-2">
-            <p className="truncate text-xs text-muted-foreground">
-              {conversation.last_message_text || t("noMessagesYet")}
+            <p className="text-muted-foreground truncate text-xs">
+              {conversation.last_message_text || t('noMessagesYet')}
             </p>
             <div className="flex shrink-0 items-center gap-1.5">
               {conversation.unread_count > 0 && (
-                <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-bold text-primary-foreground">
+                <span className="bg-primary text-primary-foreground flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-bold">
                   {conversation.unread_count}
                 </span>
               )}
               <span
                 className={cn(
-                  "h-2 w-2 rounded-full",
-                  STATUS_COLORS[conversation.status],
+                  'h-2 w-2 rounded-full',
+                  STATUS_COLORS[conversation.status]
                 )}
                 title={conversation.status}
               />
             </div>
           </div>
-          <p className="mt-1 truncate text-[10px] text-muted-foreground/80">
+          <p className="text-muted-foreground/80 mt-1 truncate text-[10px]">
             {conversation.assigned_agent_id
-              ? `${t("assignedTo")}: ${assignee?.full_name ?? t("unknown")}`
-              : t("inQueue")}
+              ? `${t('assignedTo')}: ${assignee?.full_name ?? t('unknown')}`
+              : t('inQueue')}
           </p>
-          {conversation.was_transferred && (
+          {getConversationAssignmentKind(conversation) === 'transferred' && (
             <span className="mt-1 inline-flex rounded-full bg-amber-500/10 px-1.5 py-0.5 text-[10px] text-amber-600 dark:text-amber-400">
-              {t("transferred")}
+              {t('transferred')}
             </span>
           )}
         </div>

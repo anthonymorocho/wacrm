@@ -167,7 +167,7 @@ export interface Conversation {
   assigned_agent_id?: string | null;
   /** First agent who received this conversation from the queue. */
   initial_assigned_agent_id?: string | null;
-  /** Sticky history flag: true once the conversation leaves its first owner. */
+  /** True when the active conversation cycle has been transferred. */
   was_transferred?: boolean;
   last_message_text?: string;
   last_message_at?: string;

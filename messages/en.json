@@ -117,7 +117,7 @@
       "automationTriggeredFor": "Automation \"{name}\" triggered for {who}"
     },
     "conversationsChart": {
-      "title": "Conversations Over Time",
+      "title": "Messages Over Time",
       "description": "Daily message volume by direction",
       "days": "{count} days",
       "noActivity": "No message activity in this range",

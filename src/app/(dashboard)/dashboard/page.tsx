@@ -43,9 +43,8 @@ export default function DashboardPage() {
   const [metricsLoading, setMetricsLoading] = useState(true)
 
   const [range, setRange] = useState<RangeDays>(30)
-  // Keep a cache per range so switching tabs doesn't re-fetch what we
-  // already have. Ranges the user hasn't opened yet stay null and
-  // trigger a fetch on first view.
+  // Keep the latest result per range so switching tabs can render the
+  // previous data while the selected range refreshes.
   const [series, setSeries] = useState<Record<RangeDays, ConversationsSeriesPoint[] | null>>({
     7: null,
     30: null,
@@ -134,14 +133,32 @@ export default function DashboardPage() {
     };
   }, [accountId]);
 
+  // Message volume changes throughout the day. Refresh the selected range
+  // when the dashboard regains focus and periodically while it is visible.
+  useEffect(() => {
+    const refreshSeries = () => {
+      if (document.visibilityState !== 'visible') return;
+      loadConversationsSeries(createClient(), range)
+        .then((value) => setSeries((prev) => ({ ...prev, [range]: value })))
+        .catch((err) => console.error('[dashboard] series refresh failed:', err));
+    };
+
+    window.addEventListener('focus', refreshSeries);
+    document.addEventListener('visibilitychange', refreshSeries);
+    const interval = window.setInterval(refreshSeries, 30_000);
+    return () => {
+      window.removeEventListener('focus', refreshSeries);
+      document.removeEventListener('visibilitychange', refreshSeries);
+      window.clearInterval(interval);
+    };
+  }, [range]);
+
   // Range switch handler — kept in an event callback (not an effect)
   // so the setState calls stay out of the react-hooks/set-state-in-effect
-  // rule's way. The cached bucket check means switching back to a
-  // previously-viewed range is instant and doesn't re-fetch.
+  // rule's way. A range change always fetches fresh data.
   const handleRangeChange = useCallback(
     (r: RangeDays) => {
       setRange(r)
-      if (series[r] !== null) return
       setSeriesLoading(true)
       const db = createClient()
       loadConversationsSeries(db, r)
@@ -149,7 +166,7 @@ export default function DashboardPage() {
         .catch((err) => console.error('[dashboard] series failed:', err))
         .finally(() => setSeriesLoading(false))
     },
-    [series],
+    [],
   )
 
   return (

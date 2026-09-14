@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { buildAgentWorkload, loadQueueCount } from './queries';
+import {
+  buildAgentWorkload,
+  loadConversationsSeries,
+  loadQueueCount,
+} from './queries';
 
 describe('buildAgentWorkload', () => {
   it('includes zero-load eligible agents and excludes closed conversations', () => {
@@ -65,5 +69,35 @@ describe('loadQueueCount', () => {
     expect(builder.eq).toHaveBeenCalledWith('account_id', 'account-1');
     expect(builder.is).toHaveBeenCalledWith('assigned_agent_id', null);
     expect(builder.in).toHaveBeenCalledWith('status', ['open', 'pending']);
+  });
+});
+
+describe('loadConversationsSeries', () => {
+  it('loads pre-aggregated daily message totals without fetching message rows', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 4, 18, 13, 45, 22));
+
+    const rpc = vi.fn().mockResolvedValue({
+      data: [{ day: '2026-05-18', incoming: 2, outgoing: 3 }],
+      error: null,
+    });
+    const db = { rpc };
+
+    try {
+      await expect(loadConversationsSeries(db as never, 1)).resolves.toEqual([
+        { day: '2026-05-18', incoming: 2, outgoing: 3 },
+      ]);
+
+      expect(rpc).toHaveBeenCalledWith(
+        'get_message_volume_by_day',
+        expect.objectContaining({
+          p_start: new Date(2026, 4, 18).toISOString(),
+          p_end: expect.any(String),
+          p_timezone: expect.any(String),
+        })
+      );
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

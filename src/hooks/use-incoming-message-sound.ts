@@ -6,29 +6,34 @@ import type { RealtimeChannel } from '@supabase/supabase-js';
 
 import { useAuth } from '@/hooks/use-auth';
 import { createClient } from '@/lib/supabase/client';
-import { shouldPlayIncomingMessageSound } from '@/lib/incoming-message-sound';
+import {
+  getIncomingMessageToneNotes,
+  shouldPlayIncomingMessageSound,
+} from '@/lib/incoming-message-sound';
 
-const SOUND_DURATION_SECONDS = 0.24;
-const SOUND_FREQUENCY_HZ = 880;
 const MAX_SEEN_MESSAGE_IDS = 500;
 
 function playIncomingMessageTone(audioContext: AudioContext) {
   const now = audioContext.currentTime;
-  const oscillator = audioContext.createOscillator();
-  const gain = audioContext.createGain();
 
-  oscillator.type = 'sine';
-  oscillator.frequency.setValueAtTime(SOUND_FREQUENCY_HZ, now);
-  oscillator.frequency.exponentialRampToValueAtTime(660, now + SOUND_DURATION_SECONDS);
+  for (const note of getIncomingMessageToneNotes()) {
+    const start = now + note.startSeconds;
+    const end = start + note.durationSeconds;
+    const oscillator = audioContext.createOscillator();
+    const gain = audioContext.createGain();
 
-  gain.gain.setValueAtTime(0.0001, now);
-  gain.gain.exponentialRampToValueAtTime(0.08, now + 0.02);
-  gain.gain.exponentialRampToValueAtTime(0.0001, now + SOUND_DURATION_SECONDS);
+    oscillator.type = 'triangle';
+    oscillator.frequency.setValueAtTime(note.frequencyHz, start);
 
-  oscillator.connect(gain);
-  gain.connect(audioContext.destination);
-  oscillator.start(now);
-  oscillator.stop(now + SOUND_DURATION_SECONDS);
+    gain.gain.setValueAtTime(0.0001, start);
+    gain.gain.exponentialRampToValueAtTime(note.peakGain, start + 0.015);
+    gain.gain.exponentialRampToValueAtTime(0.0001, end);
+
+    oscillator.connect(gain);
+    gain.connect(audioContext.destination);
+    oscillator.start(start);
+    oscillator.stop(end);
+  }
 }
 
 /**

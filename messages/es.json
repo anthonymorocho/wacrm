@@ -341,7 +341,7 @@
       "automationTriggeredFor": "La automatización \"{name}\" se ejecutó para {who}"
     },
     "conversationsChart": {
-      "title": "Conversaciones a lo largo del tiempo",
+      "title": "Mensajes a lo largo del tiempo",
       "description": "Volumen diario de mensajes por dirección",
       "days": "{count} días",
       "noActivity": "No hay actividad de mensajes en este periodo",

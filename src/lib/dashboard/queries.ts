@@ -4,7 +4,6 @@ import {
   daysAgoStart,
   DOW_SHORT_MON_FIRST,
   lastNDayKeys,
-  localDayKey,
   mondayIndex,
   startOfLocalDay,
 } from './date-utils'
@@ -249,27 +248,30 @@ export async function loadConversationsSeries(
   rangeDays: number,
 ): Promise<ConversationsSeriesPoint[]> {
   const start = daysAgoStart(rangeDays - 1).toISOString()
-  const { data, error } = await db
-    .from('messages')
-    .select('created_at, sender_type')
-    .gte('created_at', start)
-    .order('created_at', { ascending: true })
+  const endDate = startOfLocalDay()
+  endDate.setDate(endDate.getDate() + 1)
+  const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'
+  const { data, error } = await db.rpc('get_message_volume_by_day', {
+    p_start: start,
+    p_end: endDate.toISOString(),
+    p_timezone: timeZone,
+  })
   if (error) throw error
 
   const keys = lastNDayKeys(rangeDays)
-  const buckets = new Map<string, { incoming: number; outgoing: number }>()
-  for (const k of keys) buckets.set(k, { incoming: 0, outgoing: 0 })
-
-  for (const row of (data ?? []) as {
-    created_at: string;
-    sender_type: string;
-  }[]) {
-    const key = localDayKey(row.created_at)
-    const bucket = buckets.get(key)
-    if (!bucket) continue
-    if (row.sender_type === 'customer') bucket.incoming += 1
-    else bucket.outgoing += 1; // agent + bot both count as outgoing
-  }
+  const buckets = new Map(
+    ((data ?? []) as Array<{
+      day: string;
+      incoming: number | string | null;
+      outgoing: number | string | null;
+    }>).map((row) => [
+      row.day,
+      {
+        incoming: Number(row.incoming ?? 0),
+        outgoing: Number(row.outgoing ?? 0),
+      },
+    ])
+  )
 
   return keys.map((day) => ({
     day,

@@ -1,8 +1,11 @@
 "use client"
 
 import { Clock } from 'lucide-react'
-import { DOW_SHORT_MON_FIRST } from '@/lib/dashboard/date-utils'
 import type { ResponseTimeSummary } from '@/lib/dashboard/types'
+import {
+  formatResponseTime,
+  type ResponseTimeLabels,
+} from '@/lib/dashboard/response-time'
 import { BarChart } from '@/components/tremor/bar-chart'
 import { EmptyState } from './empty-state'
 import { Skeleton } from './skeleton'
@@ -21,18 +24,31 @@ interface ResponseTimeChartProps {
 
 import { useTranslations } from 'next-intl'
 
-// Single category, single colour — the data is "average minutes
-// per weekday". Tremor expects categories as the second tuple in
-// the row object, so we shape the buckets into
-// `{ day: 'Mon', 'Avg minutes': 4.2 }` rows below.
-const CATEGORY = 'Avg minutes'
-
 export function ResponseTimeChart({
   data,
   loading,
   thresholdMinutes = 5,
 }: ResponseTimeChartProps) {
   const t = useTranslations('Dashboard.responseTimeChart')
+  const timeLabels: ResponseTimeLabels = {
+    second: t('secondsShort'),
+    minute: t('minutesShort'),
+    hour: t('hoursShort'),
+    separator: t('unitSeparator'),
+    empty: t('noValue'),
+  }
+  const formatDuration = (minutes: number | null) =>
+    formatResponseTime(minutes, timeLabels)
+  const category = t('average')
+  const weekdays = [
+    t('weekdays.mon'),
+    t('weekdays.tue'),
+    t('weekdays.wed'),
+    t('weekdays.thu'),
+    t('weekdays.fri'),
+    t('weekdays.sat'),
+    t('weekdays.sun'),
+  ]
   const hasData = data?.buckets.some((b) => b.avgMinutes != null) ?? false
 
   // Map buckets → Tremor rows. Null `avgMinutes` (no samples)
@@ -41,8 +57,8 @@ export function ResponseTimeChart({
   // surface "no samples" copy without losing the data shape.
   const chartData =
     data?.buckets.map((b, i) => ({
-      day: DOW_SHORT_MON_FIRST[i],
-      [CATEGORY]: b.avgMinutes ?? 0,
+      day: weekdays[i],
+      [category]: b.avgMinutes ?? 0,
       samples: b.samples,
     })) ?? []
 
@@ -60,7 +76,7 @@ export function ResponseTimeChart({
         <div className="flex items-center gap-3 text-right text-xs">
           {thresholdMinutes > 0 && (
             <span className="rounded-full border border-rose-500/40 bg-rose-500/10 px-2 py-0.5 font-medium text-rose-300 tabular-nums">
-              {t('target', { minutes: thresholdMinutes })}
+              {t('target', { value: formatDuration(thresholdMinutes) })}
             </span>
           )}
           {data && (data.thisWeekAvg != null || data.lastWeekAvg != null) && (
@@ -68,12 +84,14 @@ export function ResponseTimeChart({
               <div className="text-muted-foreground">
                 {t('thisWeek')}{' '}
                 <span className="font-medium text-foreground tabular-nums">
-                  {fmt(data.thisWeekAvg)}
+                  {formatDuration(data.thisWeekAvg)}
                 </span>
               </div>
               <div className="text-muted-foreground">
                 {t('lastWeek')}{' '}
-                <span className="tabular-nums">{fmt(data.lastWeekAvg)}</span>
+                <span className="tabular-nums">
+                  {formatDuration(data.lastWeekAvg)}
+                </span>
               </div>
             </div>
           )}
@@ -93,13 +111,13 @@ export function ResponseTimeChart({
           <BarChart
             data={chartData}
             index="day"
-            categories={[CATEGORY]}
+            categories={[category]}
             // 'violet' maps to Tailwind's `fill-violet-500` — matches
             // the brand accent the hand-rolled bars used (#7c3aed).
             colors={['violet']}
-            valueFormatter={(value) => `${value.toFixed(1)}m`}
+            valueFormatter={formatDuration}
             showLegend={false}
-            yAxisWidth={48}
+            yAxisWidth={76}
             // Compact height so the chart sits well inside the card
             // without dominating the row alongside the donut + activity feed.
             className="h-[260px]"
@@ -108,11 +126,4 @@ export function ResponseTimeChart({
       </div>
     </section>
   )
-}
-
-function fmt(mins: number | null): string {
-  if (mins == null) return '—'
-  if (mins < 1) return `${Math.max(1, Math.round(mins * 60))}s`
-  if (mins < 60) return `${mins.toFixed(1)}m`
-  return `${(mins / 60).toFixed(1)}h`
 }

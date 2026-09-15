@@ -59,6 +59,17 @@
     "menuSettings": "Settings",
     "menuSignOut": "Sign out"
   },
+  "MessageNotifications": {
+    "enableNotifications": "Enable notifications",
+    "permissionEnabled": "Notifications are enabled",
+    "permissionBlocked": "Notifications are blocked",
+    "permissionGranted": "Browser notifications are enabled.",
+    "permissionDenied": "Allow notifications from your browser settings.",
+    "newMessageFrom": "New message from {who}",
+    "unknownContact": "Contact",
+    "messageFallback": "New message received",
+    "openConversation": "Open conversation"
+  },
   "ModeToggle": {
     "switchMode": "Switch to {mode} mode"
   },

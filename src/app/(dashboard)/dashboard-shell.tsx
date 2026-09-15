@@ -10,6 +10,7 @@ import { AvailabilityControl } from '@/components/presence/availability-control'
 import { QueueCountIndicator } from '@/components/presence/queue-count-indicator';
 import { PresenceProvider } from '@/hooks/use-presence';
 import { useIncomingMessageSound } from '@/hooks/use-incoming-message-sound';
+import { IncomingMessageNotifications } from '@/components/notifications/incoming-message-notifications';
 
 // Auth-gated dashboard shell. Extracted from the layout so the layout
 // itself can stay a server component and export metadata (noindex) —
@@ -55,6 +56,7 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
           onOpenSidebar={() => setSidebarOpen(true)}
           rightContent={
             <div className="flex items-center gap-2">
+              <IncomingMessageNotifications />
               <QueueCountIndicator />
               <AvailabilityControl />
             </div>

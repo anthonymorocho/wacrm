@@ -59,6 +59,17 @@
     "menuSettings": "Configuración",
     "menuSignOut": "Cerrar sesión"
   },
+  "MessageNotifications": {
+    "enableNotifications": "Activar notificaciones",
+    "permissionEnabled": "Notificaciones activadas",
+    "permissionBlocked": "Notificaciones bloqueadas",
+    "permissionGranted": "Las notificaciones del navegador est\u00e1n activadas.",
+    "permissionDenied": "Permite las notificaciones desde la configuraci\u00f3n del navegador.",
+    "newMessageFrom": "Nuevo mensaje de {who}",
+    "unknownContact": "Contacto",
+    "messageFallback": "Nuevo mensaje recibido",
+    "openConversation": "Abrir conversaci\u00f3n"
+  },
   "ModeToggle": {
     "switchMode": "Cambiar al modo {mode}"
   },

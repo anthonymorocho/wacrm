@@ -24,6 +24,7 @@ import { ContactSidebar } from '@/components/inbox/contact-sidebar';
 import { WifiOff } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/hooks/use-auth';
+import { replaceInboxConversationUrl } from '@/lib/inbox/navigation';
 
 // Remembers the agent's show/hide choice for the desktop contact panel
 // across reloads and sessions (device-scoped, like the theme prefs).
@@ -499,9 +500,9 @@ function InboxPageInner() {
       ) {
         autoSelectedForDeepLinkRef.current = deepLinkConvId;
         // If the deep-linked conversation is already the active one
-        // (e.g. because the user clicked it in the list and we
-        // router.replace()'d the URL, which made the ConversationList
-        // refetch and land us back here), do NOT re-apply it. Doing so
+        // (e.g. because the user clicked it in the list and the URL was
+        // updated, which made the ConversationList refetch and land us back
+        // here), do NOT re-apply it. Doing so
         // would setMessages([]) on a thread whose messages have
         // already been loaded by MessageThread — and because
         // conversationId didn't change, MessageThread wouldn't
@@ -560,20 +561,20 @@ function InboxPageInner() {
           c.id === conv.id && c.unread_count > 0 ? { ...c, unread_count: 0 } : c
         )
       );
-      // Record the selection on the deep-link ref BEFORE we change the
-      // URL. The router.replace below flips `deepLinkConvId`, which can
-      // in turn cause ConversationList to refetch and eventually call
-      // handleConversationsLoaded again. Without this line, the ref
-      // still points at the previous value, the auto-select block
-      // sees `ref !== deepLinkConvId`, fires a second time, and
-      // clobbers the messages MessageThread just fetched.
+      // Record the selection on the deep-link ref BEFORE we update the URL.
+      // Native history updates are integrated with Next's navigation hooks,
+      // so this can still cause the deep-link value to change without
+      // navigating the inbox route again. Without this line, the ref still
+      // points at the previous value, the auto-select block sees
+      // `ref !== deepLinkConvId`, fires a second time, and clobbers the
+      // messages MessageThread just fetched.
       autoSelectedForDeepLinkRef.current = conv.id;
       // Reflect the selection in the URL so a refresh lands the user
       // back in the same thread, and so copy-paste links work. Use
-      // replace() to avoid polluting browser history with every click.
-      router.replace(`/inbox?c=${conv.id}`, { scroll: false });
+      // replaceState() to avoid both route navigation and history entries.
+      replaceInboxConversationUrl(conv.id, window.history);
     },
-    [accountRole, activeConversation?.id, router, user?.id]
+    [accountRole, activeConversation?.id, user?.id]
   );
 
   // Mobile "back" — deselect the conversation so the list pane comes

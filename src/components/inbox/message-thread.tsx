@@ -897,8 +897,12 @@ export function MessageThread({
     // paints on top of the contact sidebar at lg+ — outgoing bubbles get
     // clipped and the hover toolbar overlaps the Tags panel. Letting the
     // root shrink lets the bubbles' break-words / max-w caps apply.
+    // `min-h-0` is equally important for the messages area's overflow
+    // container when the thread is embedded in a full-height panel.
     // Issue #257.
-    <div className={cn('flex min-w-0 flex-1 flex-col', DOODLE_BG_CLASSES)}>
+    <div
+      className={cn('flex min-h-0 min-w-0 flex-1 flex-col', DOODLE_BG_CLASSES)}
+    >
       {/* Header — solid card surface sits on top of the doodle so the
           name/avatar/dropdowns stay legible. */}
       <div className="border-border bg-card flex items-center justify-between gap-2 border-b px-3 py-3 sm:px-4">

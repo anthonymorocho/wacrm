@@ -3,6 +3,7 @@ import {
   FileText,
   KeyRound,
   LayoutGrid,
+  MessageCircle,
   Palette,
   PlugZap,
   Route,
@@ -28,6 +29,7 @@ export const SETTINGS_SECTIONS = [
   'security',
   'appearance',
   'whatsapp',
+  'meta',
   'templates',
   'quick-replies',
   'fields',
@@ -78,6 +80,12 @@ export const SECTION_META: Record<SettingsSection, SectionMeta> = {
     id: 'whatsapp',
     label: 'WhatsApp',
     icon: PlugZap,
+    group: 'workspace',
+  },
+  meta: {
+    id: 'meta',
+    label: 'Instagram & Messenger',
+    icon: MessageCircle,
     group: 'workspace',
   },
   templates: {

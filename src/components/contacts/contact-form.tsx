@@ -284,7 +284,12 @@ export function ContactForm({
                       onClick={() => onViewExisting(dupMatch.contact.id)}
                       className="font-medium underline underline-offset-2 hover:no-underline"
                     >
-                      {t('viewExisting', { name: dupMatch.contact.name || dupMatch.contact.phone })}
+                      {t('viewExisting', {
+                        name:
+                          dupMatch.contact.name ||
+                          dupMatch.contact.phone ||
+                          'Contact',
+                      })}
                     </button>
                   )}
                 </div>

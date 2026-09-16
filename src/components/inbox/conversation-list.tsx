@@ -33,6 +33,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { BulkTransferDialog } from './bulk-transfer-dialog';
 import { BulkCloseDialog } from './bulk-close-dialog';
 import { getBulkDialogKey } from '@/lib/inbox/dialog-keys';
+import { ConversationChannelBadge } from './channel-badge';
 
 interface ConversationListProps {
   activeConversationId: string | null;
@@ -853,9 +854,12 @@ function ConversationItem({
         {/* Content */}
         <div className="min-w-0 flex-1">
           <div className="flex items-center justify-between gap-2">
-            <span className="text-foreground truncate text-sm font-medium">
-              {displayName}
-            </span>
+            <div className="flex min-w-0 items-center gap-1.5">
+              <span className="text-foreground truncate text-sm font-medium">
+                {displayName}
+              </span>
+              <ConversationChannelBadge channel={conversation.channel} />
+            </div>
             <span className="text-muted-foreground shrink-0 text-[10px]">
               {timeAgo}
             </span>

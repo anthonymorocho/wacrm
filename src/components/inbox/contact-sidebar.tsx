@@ -322,7 +322,8 @@ export function ContactSidebar({
     );
   }
 
-  const displayName = contact.name || contact.phone;
+  const displayName =
+    contact.name || contact.phone || tThread('unknownContact');
   const initials = displayName.charAt(0).toUpperCase();
 
   return (
@@ -358,7 +359,9 @@ export function ContactSidebar({
               className="text-muted-foreground hover:bg-muted flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors"
             >
               <Phone className="text-muted-foreground h-4 w-4" />
-              <span className="flex-1 text-left">{contact.phone}</span>
+              <span className="flex-1 text-left">
+                {contact.phone ?? tThread('phoneUnavailable')}
+              </span>
               {copied ? (
                 <Check className="text-primary h-3 w-3" />
               ) : (

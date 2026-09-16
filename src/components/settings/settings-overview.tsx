@@ -9,6 +9,7 @@ import { useAuth } from '@/hooks/use-auth';
 import { useTheme } from '@/hooks/use-theme';
 import { THEMES } from '@/lib/themes';
 import { CURRENCIES } from '@/lib/currency';
+import type { MetaChannelProvider } from '@/lib/meta/messaging';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Card } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
@@ -29,6 +30,20 @@ interface OverviewCounts {
 interface WhatsAppStatus {
   configured: boolean;
   connected: boolean;
+}
+
+interface SocialChannelStatus {
+  configured: boolean;
+  connected: boolean;
+}
+
+type SocialChannelStatuses = Record<MetaChannelProvider, SocialChannelStatus>;
+
+function emptySocialChannelStatuses(): SocialChannelStatuses {
+  return {
+    instagram: { configured: false, connected: false },
+    messenger: { configured: false, connected: false },
+  };
 }
 
 export function SettingsOverview({
@@ -57,6 +72,9 @@ export function SettingsOverview({
   // from blanking the rest of the landing.
   const [whatsapp, setWhatsapp] = useState<WhatsAppStatus | null>(null);
   const [whatsappLoading, setWhatsappLoading] = useState(true);
+  const [socialChannels, setSocialChannels] =
+    useState<SocialChannelStatuses | null>(null);
+  const [socialChannelsLoading, setSocialChannelsLoading] = useState(true);
 
   useEffect(() => {
     if (!user || !accountId) return;
@@ -153,6 +171,54 @@ export function SettingsOverview({
       setWhatsappLoading(false);
     })();
 
+    // Instagram and Messenger use their own account-scoped configuration.
+    // Keep this request independent from WhatsApp so a social channel cannot
+    // delay or change the existing WhatsApp status tile.
+    (async () => {
+      setSocialChannelsLoading(true);
+      try {
+        const response = await fetch('/api/meta/channels', {
+          cache: 'no-store',
+        });
+        const body: unknown = await response.json();
+        if (!response.ok) throw new Error('Failed to load Meta channels');
+
+        const next = emptySocialChannelStatuses();
+        const bodyRecord =
+          body && typeof body === 'object' && !Array.isArray(body)
+            ? (body as { channels?: unknown })
+            : null;
+        const channels = Array.isArray(bodyRecord?.channels)
+          ? bodyRecord.channels
+          : [];
+
+        for (const rawChannel of channels) {
+          const channel =
+            rawChannel &&
+            typeof rawChannel === 'object' &&
+            !Array.isArray(rawChannel)
+              ? (rawChannel as { provider?: unknown; status?: unknown })
+              : null;
+          if (
+            channel?.provider !== 'instagram' &&
+            channel?.provider !== 'messenger'
+          ) {
+            continue;
+          }
+          next[channel.provider] = {
+            configured: true,
+            connected: channel.status === 'connected',
+          };
+        }
+
+        if (!cancelled) setSocialChannels(next);
+      } catch {
+        if (!cancelled) setSocialChannels(emptySocialChannelStatuses());
+      } finally {
+        if (!cancelled) setSocialChannelsLoading(false);
+      }
+    })();
+
     return () => {
       cancelled = true;
     };
@@ -172,6 +238,7 @@ export function SettingsOverview({
   // fallback so a single failed query never blanks a tile.
   const tiles: {
     section: SettingsSection;
+    title?: ReactNode;
     loading: boolean;
     subtitle: ReactNode;
   }[] = [
@@ -181,6 +248,38 @@ export function SettingsOverview({
       subtitle: !whatsapp?.configured ? (
         t('notSetup')
       ) : whatsapp.connected ? (
+        <>
+          <StatusDot tone="ok" /> {t('connected')}
+        </>
+      ) : (
+        <>
+          <StatusDot tone="muted" /> {t('needsReconnecting')}
+        </>
+      ),
+    },
+    {
+      section: 'meta',
+      title: t('instagram'),
+      loading: socialChannelsLoading,
+      subtitle: !socialChannels?.instagram.configured ? (
+        t('notSetup')
+      ) : socialChannels.instagram.connected ? (
+        <>
+          <StatusDot tone="ok" /> {t('connected')}
+        </>
+      ) : (
+        <>
+          <StatusDot tone="muted" /> {t('needsReconnecting')}
+        </>
+      ),
+    },
+    {
+      section: 'meta',
+      title: t('messenger'),
+      loading: socialChannelsLoading,
+      subtitle: !socialChannels?.messenger.configured ? (
+        t('notSetup')
+      ) : socialChannels.messenger.connected ? (
         <>
           <StatusDot tone="ok" /> {t('connected')}
         </>
@@ -274,12 +373,12 @@ export function SettingsOverview({
 
       {/* Status tiles */}
       <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-        {tiles.map(({ section, loading, subtitle }) => {
+        {tiles.map(({ section, title, loading, subtitle }, index) => {
           const meta = SECTION_META[section];
           const Icon = meta.icon;
           return (
             <button
-              key={section}
+              key={`${section}-${index}`}
               type="button"
               onClick={() => onSelect(section)}
               className={cn(
@@ -292,7 +391,7 @@ export function SettingsOverview({
               </span>
               <span className="min-w-0 flex-1">
                 <span className="text-foreground block text-sm font-semibold">
-                  {tSections(section)}
+                  {title ?? tSections(section)}
                 </span>
                 <span className="text-muted-foreground mt-0.5 flex items-center gap-1.5 text-xs">
                   {loading ? (

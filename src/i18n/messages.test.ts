@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { SETTINGS_SECTIONS } from '../components/settings/settings-sections';
 
 // Locale dictionaries are hand-maintained. English is the source of
 // truth (src/i18n/request.ts falls back to en.json only when a whole
@@ -32,6 +33,14 @@ function loadKeys(locale: string): Set<string> {
 describe('message catalogue parity', () => {
   const source = loadKeys(SOURCE_LOCALE);
 
+  it('en.json labels every settings section', () => {
+    const missing = SETTINGS_SECTIONS.filter(
+      (section) => !source.has(`Settings.sections.${section}`)
+    );
+
+    expect(missing, 'en.json is missing settings section labels').toEqual([]);
+  });
+
   it.each(TRANSLATED_LOCALES)('%s.json covers every en.json key', (locale) => {
     const translated = loadKeys(locale);
     const missing = [...source].filter((k) => !translated.has(k)).sort();
@@ -44,9 +53,14 @@ describe('message catalogue parity', () => {
     expect(orphaned, `${locale}.json has keys absent from en.json`).toEqual([]);
   });
 
-  it.each(PARTIAL_TRANSLATED_LOCALES)('%s.json only overrides known keys', (locale) => {
-    const translated = loadKeys(locale);
-    const orphaned = [...translated].filter((k) => !source.has(k)).sort();
-    expect(orphaned, `${locale}.json has keys absent from en.json`).toEqual([]);
-  });
+  it.each(PARTIAL_TRANSLATED_LOCALES)(
+    '%s.json only overrides known keys',
+    (locale) => {
+      const translated = loadKeys(locale);
+      const orphaned = [...translated].filter((k) => !source.has(k)).sort();
+      expect(orphaned, `${locale}.json has keys absent from en.json`).toEqual(
+        []
+      );
+    }
+  );
 });

@@ -169,6 +169,11 @@
     }
   },
   "Inbox": {
+    "channel": {
+      "whatsapp": "WhatsApp",
+      "instagram": "Instagram",
+      "messenger": "Facebook Messenger"
+    },
     "page": {
       "whatsappNotConnected": "WhatsApp® is not connected. Go to Settings to connect your account."
     },
@@ -244,7 +249,9 @@
       "selectConversation": "Select a conversation",
       "selectConversationHint": "Choose a conversation from the left to start messaging",
       "today": "Today",
-      "yesterday": "Yesterday"
+      "yesterday": "Yesterday",
+      "unknownContact": "Unknown contact",
+      "phoneUnavailable": "No phone number"
     },
     "sessionTimer": {
       "expired": "Expired",
@@ -1361,6 +1368,8 @@
     "pageTitle": "Settings",
     "pageDesc": "Everything in one place — your account and your workspace. Pick a section to manage it.",
     "overview": {
+      "instagram": "Instagram",
+      "messenger": "Facebook Messenger",
       "notSetup": "Not set up yet",
       "connected": "Connected",
       "needsReconnecting": "Needs reconnecting",
@@ -1707,17 +1716,57 @@
       "step4_5": "Subscribe to \"messages\" webhook field",
       "metaDocs": "Meta WhatsApp API Documentation"
     },
+    "meta": {
+      "title": "Instagram & Facebook Messenger",
+      "description": "Receive Instagram and Facebook Messenger messages in the same Inbox as WhatsApp.",
+      "webhookTitle": "Meta webhook",
+      "webhookDescription": "Use this URL in your Meta app webhook settings and subscribe to messages.",
+      "webhookUrl": "Webhook callback URL",
+      "copyWebhook": "Copy webhook URL",
+      "copyFailed": "Could not copy the webhook URL",
+      "instagram": "Instagram",
+      "messenger": "Facebook Messenger",
+      "instagramDescription": "Connect an Instagram professional account that uses Instagram Messaging.",
+      "messengerDescription": "Connect a Facebook Page that receives Messenger messages.",
+      "externalAccountId": "Instagram account or Facebook Page ID",
+      "externalAccountIdPlaceholder": "e.g. 123456789012345",
+      "displayName": "Display name",
+      "displayNamePlaceholder": "e.g. Acme Instagram",
+      "accessToken": "Page access token",
+      "accessTokenPlaceholder": "Paste the Meta access token",
+      "appSecret": "Meta App Secret",
+      "appSecretPlaceholder": "Paste the Meta App Secret",
+      "verifyToken": "Webhook verify token",
+      "verifyTokenPlaceholder": "Create a private verify token",
+      "credentialsHint": "Credentials are encrypted before storage and never returned to the browser.",
+      "configured": "Configured",
+      "disconnected": "Disconnected",
+      "adminOnly": "Only account admins can change channel credentials.",
+      "allFieldsRequired": "Complete the account ID and all three credential fields.",
+      "save": "Save channel",
+      "saving": "Saving...",
+      "saveSuccess": "Meta channel saved",
+      "saveFailed": "Could not save the Meta channel",
+      "remove": "Remove",
+      "removing": "Removing...",
+      "removeConfirm": "Remove this Meta channel? New messages will stop arriving.",
+      "removeSuccess": "Meta channel removed",
+      "removeFailed": "Could not remove the Meta channel",
+      "loadFailed": "Could not load Meta channels"
+    },
     "sections": {
       "overview": "Overview",
       "profile": "Your profile",
       "security": "Login & security",
       "appearance": "Appearance",
       "whatsapp": "WhatsApp",
+      "meta": "Instagram & Messenger",
       "templates": "Templates",
       "quick-replies": "Quick replies",
       "fields": "Fields & tags",
       "deals": "Deals & currency",
       "members": "Team members",
+      "routing": "Conversation routing",
       "api": "API keys"
     },
     "groups": {

@@ -21,7 +21,7 @@ export function normalizeKey(phone: string): string {
 /** Minimal shape we need back from a contacts lookup. */
 export interface ExistingContact {
   id: string;
-  phone: string;
+  phone: string | null;
   name?: string | null;
   [key: string]: unknown;
 }
@@ -51,7 +51,9 @@ export async function findExistingContact(
   if (error || !data) return null;
 
   return (
-    (data as ExistingContact[]).find((c) => phonesMatch(c.phone, phone)) ?? null
+    (data as ExistingContact[]).find((c) =>
+      phonesMatch(c.phone ?? '', phone),
+    ) ?? null
   );
 }
 
@@ -61,7 +63,7 @@ export async function findExistingContact(
  * exact matches but only warns on fuzzy ones.
  */
 export function isExactMatch(existing: ExistingContact, phone: string): boolean {
-  return normalizeKey(existing.phone) === normalizeKey(phone);
+  return normalizeKey(existing.phone ?? '') === normalizeKey(phone);
 }
 
 /**

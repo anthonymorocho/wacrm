@@ -53,6 +53,7 @@ import { buildReplyPreview } from './reply-quote';
 import { toast } from 'sonner';
 import { messageAuthorLabel } from '@/lib/inbox/message-authorship';
 import { renderTemplateBody } from '@/lib/whatsapp/template-message-text';
+import { ConversationChannelBadge } from './channel-badge';
 
 interface ReplyDraft {
   id: string;
@@ -875,7 +876,7 @@ export function MessageThread({
     );
   }
 
-  const displayName = contact.name || contact.phone;
+  const displayName = contact.name || contact.phone || t('unknownContact');
   const messageGroups = groupMessagesByDate(messages);
   const currentStatus = STATUS_OPTIONS.find(
     (s) => s.value === conversation.status
@@ -923,11 +924,14 @@ export function MessageThread({
             {displayName.charAt(0).toUpperCase()}
           </div>
           <div className="min-w-0">
-            <h2 className="text-foreground truncate text-sm font-semibold">
-              {displayName}
-            </h2>
+            <div className="flex min-w-0 items-center gap-1.5">
+              <h2 className="text-foreground truncate text-sm font-semibold">
+                {displayName}
+              </h2>
+              <ConversationChannelBadge channel={conversation.channel} />
+            </div>
             <p className="text-muted-foreground truncate text-xs">
-              {contact.phone}
+              {contact.phone ?? t('phoneUnavailable')}
             </p>
           </div>
           {/* Session timer badge — hidden on the narrowest phones so

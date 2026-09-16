@@ -169,6 +169,11 @@
     }
   },
   "Inbox": {
+    "channel": {
+      "whatsapp": "WhatsApp",
+      "instagram": "Instagram",
+      "messenger": "Facebook Messenger"
+    },
     "page": {
       "whatsappNotConnected": "WhatsApp®이 연결되어 있지 않습니다. 설정으로 이동해 계정을 연결하세요."
     },
@@ -244,7 +249,9 @@
       "selectConversation": "대화를 선택하세요",
       "selectConversationHint": "왼쪽에서 대화를 선택해 메시지를 시작하세요",
       "today": "오늘",
-      "yesterday": "어제"
+      "yesterday": "어제",
+      "unknownContact": "알 수 없는 연락처",
+      "phoneUnavailable": "전화번호 없음"
     },
     "sessionTimer": {
       "expired": "만료됨",
@@ -1361,6 +1368,8 @@
     "pageTitle": "설정",
     "pageDesc": "계정과 워크스페이스에 관한 모든 것을 한곳에서 관리하세요. 관리할 섹션을 선택하세요.",
     "overview": {
+      "instagram": "Instagram",
+      "messenger": "Facebook Messenger",
       "notSetup": "아직 설정되지 않음",
       "connected": "연결됨",
       "needsReconnecting": "재연결 필요",
@@ -1707,17 +1716,57 @@
       "step4_5": "\"messages\" 웹훅 필드를 구독",
       "metaDocs": "Meta WhatsApp API 문서"
     },
+    "meta": {
+      "title": "Instagram 및 Facebook Messenger",
+      "description": "Instagram과 Facebook Messenger 메시지를 WhatsApp과 같은 받은편지함에서 받습니다.",
+      "webhookTitle": "Meta 웹훅",
+      "webhookDescription": "Meta 앱 웹훅 설정에 이 URL을 사용하고 messages를 구독하세요.",
+      "webhookUrl": "웹훅 콜백 URL",
+      "copyWebhook": "웹훅 URL 복사",
+      "copyFailed": "웹훅 URL을 복사할 수 없습니다",
+      "instagram": "Instagram",
+      "messenger": "Facebook Messenger",
+      "instagramDescription": "Instagram Messaging을 사용하는 프로페셔널 계정을 연결합니다.",
+      "messengerDescription": "Messenger 메시지를 받는 Facebook 페이지를 연결합니다.",
+      "externalAccountId": "Instagram 계정 또는 Facebook 페이지 ID",
+      "externalAccountIdPlaceholder": "예: 123456789012345",
+      "displayName": "표시 이름",
+      "displayNamePlaceholder": "예: Acme Instagram",
+      "accessToken": "페이지 액세스 토큰",
+      "accessTokenPlaceholder": "Meta 액세스 토큰 붙여넣기",
+      "appSecret": "Meta 앱 시크릿",
+      "appSecretPlaceholder": "Meta 앱 시크릿 붙여넣기",
+      "verifyToken": "웹훅 확인 토큰",
+      "verifyTokenPlaceholder": "비공개 확인 토큰 만들기",
+      "credentialsHint": "자격 증명은 저장 전에 암호화되며 브라우저로 반환되지 않습니다.",
+      "configured": "구성됨",
+      "disconnected": "연결 끊김",
+      "adminOnly": "계정 관리자만 채널 자격 증명을 변경할 수 있습니다.",
+      "allFieldsRequired": "계정 ID와 세 가지 자격 증명 필드를 모두 입력하세요.",
+      "save": "채널 저장",
+      "saving": "저장 중...",
+      "saveSuccess": "Meta 채널이 저장되었습니다",
+      "saveFailed": "Meta 채널을 저장할 수 없습니다",
+      "remove": "삭제",
+      "removing": "삭제 중...",
+      "removeConfirm": "이 Meta 채널을 삭제하시겠습니까? 새 메시지가 더 이상 도착하지 않습니다.",
+      "removeSuccess": "Meta 채널이 삭제되었습니다",
+      "removeFailed": "Meta 채널을 삭제할 수 없습니다",
+      "loadFailed": "Meta 채널을 불러올 수 없습니다"
+    },
     "sections": {
       "overview": "개요",
       "profile": "내 프로필",
       "security": "로그인 & 보안",
       "appearance": "화면 설정",
       "whatsapp": "WhatsApp",
+      "meta": "Instagram 및 Messenger",
       "templates": "템플릿",
       "quick-replies": "빠른 답장",
       "fields": "필드 & 태그",
       "deals": "딜 & 통화",
       "members": "팀원",
+      "routing": "대화 라우팅",
       "api": "API 키"
     },
     "groups": {

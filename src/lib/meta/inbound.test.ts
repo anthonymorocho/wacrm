@@ -253,6 +253,38 @@ describe('processNormalizedMetaMessage', () => {
     );
   });
 
+  it('rebinds an existing conversation to the channel that delivered the message', async () => {
+    const { db, calls } = fakeDatabase({
+      meta_contact_identities: [
+        { data: { contact_id: contact.id }, error: null },
+      ],
+      contacts: [{ data: contact, error: null }],
+      conversations: [
+        { data: [conversation], error: null },
+        { data: null, error: null },
+      ],
+      messages: [{ data: null, error: null }],
+    });
+
+    expect(
+      await processNormalizedMetaMessage(db, zernioChannel, zernioMessage)
+    ).toBe('inserted');
+    expect(calls).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          table: 'conversations',
+          method: 'update',
+          args: [
+            expect.objectContaining({
+              channel: 'messenger',
+              channel_id: 'channel-1',
+            }),
+          ],
+        }),
+      ])
+    );
+  });
+
   it('treats a repeated provider message id as a successful duplicate', async () => {
     const { db, calls } = fakeDatabase({
       meta_contact_identities: [

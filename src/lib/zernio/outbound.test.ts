@@ -61,6 +61,8 @@ function makeDatabase(
   options: {
     conversation?: Record<string, unknown>;
     participantId?: string;
+    channelSource?: 'meta' | 'zernio';
+    channelExternalAccountId?: string;
   } = {}
 ) {
   const messageInserts: Record<string, unknown>[] = [];
@@ -104,7 +106,12 @@ function makeDatabase(
         }
         if (table === 'meta_channels' && operation === 'select') {
           return {
-            data: { integration_source: 'zernio', provider: 'messenger' },
+            data: {
+              integration_source: options.channelSource ?? 'zernio',
+              provider: 'messenger',
+              external_account_id:
+                options.channelExternalAccountId ?? 'facebook-page-1',
+            },
             error: null,
           };
         }
@@ -185,6 +192,36 @@ describe('sendMessageToConversation — Zernio Messenger', () => {
     expect(result).toEqual({
       messageId: 'crm-message-1',
       whatsappMessageId: 'zernio-message-1',
+    });
+  });
+
+  it('rebinds a legacy Messenger conversation to the active Zernio channel', async () => {
+    const { db, messageInserts, conversationUpdates } = makeDatabase({
+      conversation: { ...conversation, channel_id: 'legacy-channel' },
+      channelSource: 'meta',
+    });
+    connections.getZernioConnection.mockResolvedValue({
+      account_id: 'account-1',
+      meta_channel_id: 'zernio-channel-1',
+      facebook_page_id: 'facebook-page-1',
+      zernio_account_id: 'zernio-account-1',
+      status: 'connected',
+    });
+
+    await sendMessageToConversation(db, 'account-1', {
+      conversationId: 'crm-conversation-1',
+      messageType: 'text',
+      contentText: 'Respuesta desde Zernio',
+    });
+
+    expect(conversationUpdates).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ channel_id: 'zernio-channel-1' }),
+      ])
+    );
+    expect(messageInserts[0]).toMatchObject({
+      channel: 'messenger',
+      channel_id: 'zernio-channel-1',
     });
   });
 

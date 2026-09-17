@@ -389,6 +389,7 @@ export async function sendMessageToConversation(
   // conversation's display channel value.
   const conversationChannel = conversation.channel as
     'whatsapp' | 'instagram' | 'messenger' | undefined;
+  let outboundChannelId = conversation.channel_id ?? null;
   let isZernioMessenger = false;
   if (conversationChannel === 'messenger') {
     if (
@@ -404,18 +405,52 @@ export async function sendMessageToConversation(
 
     const { data: channel, error: channelError } = await db
       .from('meta_channels')
-      .select('integration_source, provider, status')
+      .select('integration_source, provider, status, external_account_id')
       .eq('id', conversation.channel_id)
       .eq('account_id', accountId)
       .maybeSingle();
     if (channelError) throw channelError;
 
     if (channel?.integration_source !== 'zernio') {
-      throw new SendMessageError(
-        'unsupported_channel',
-        'Direct Messenger replies are not configured. Connect this Facebook Page through Zernio.',
-        400
-      );
+      // Existing Messenger threads may still point at the old direct-Meta
+      // channel after the account was moved to Zernio. If the connected
+      // Zernio page is the same page, repair that reference before sending.
+      const connection = await getZernioConnection(supabaseAdmin(), accountId);
+      const sameFacebookPage =
+        typeof channel?.external_account_id === 'string' &&
+        channel.external_account_id.trim() &&
+        connection?.facebook_page_id &&
+        channel.external_account_id === connection.facebook_page_id;
+
+      if (
+        !connection ||
+        connection.status !== 'connected' ||
+        !connection.meta_channel_id ||
+        (channel?.external_account_id && !sameFacebookPage)
+      ) {
+        throw new SendMessageError(
+          'unsupported_channel',
+          'Direct Messenger replies are not configured. Connect this Facebook Page through Zernio.',
+          400
+        );
+      }
+
+      const { error: rebindError } = await db
+        .from('conversations')
+        .update({
+          channel: 'messenger',
+          channel_id: connection.meta_channel_id,
+        })
+        .eq('id', conversationId)
+        .eq('account_id', accountId);
+      if (rebindError) {
+        throw new SendMessageError(
+          'db_error',
+          'The Messenger conversation was found but could not be linked to Zernio.',
+          500
+        );
+      }
+      outboundChannelId = connection.meta_channel_id;
     }
     isZernioMessenger = true;
     if (messageType !== 'text') {
@@ -742,7 +777,7 @@ export async function sendMessageToConversation(
         whatsappMessageId: providerMessageId,
         replyToMessageId,
         channel: conversationChannel || 'whatsapp',
-        channelId: conversation.channel_id ?? null,
+        channelId: outboundChannelId,
       })
     )
     .select()

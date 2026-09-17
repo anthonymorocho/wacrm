@@ -218,6 +218,7 @@ async function insertMessage(
 async function updateConversation(
   db: MetaInboundDatabase,
   accountId: string,
+  channel: MetaChannel,
   conversation: SocialConversation,
   message: NormalizedMetaMessage
 ): Promise<void> {
@@ -225,6 +226,11 @@ async function updateConversation(
   const { error } = await db
     .from('conversations')
     .update({
+      // A conversation can predate the currently connected social channel.
+      // Rebind it when the provider delivers a new message so the next
+      // outbound reply uses the same channel that just received it.
+      channel: message.provider,
+      channel_id: channel.id,
       last_message_text: message.contentText || '[Meta message]',
       last_message_at: message.timestamp,
       unread_count: (conversation.unread_count ?? 0) + 1,
@@ -265,7 +271,13 @@ export async function processNormalizedMetaMessage(
     const inserted = await insertMessage(db, channel, conversation.id, message);
     if (inserted === 'duplicate') return 'duplicate';
 
-    await updateConversation(db, channel.account_id, conversation, message);
+    await updateConversation(
+      db,
+      channel.account_id,
+      channel,
+      conversation,
+      message
+    );
 
     await routeAfterInboundMessage(db, channel.account_id);
 

@@ -5,12 +5,14 @@ import {
   Check,
   Camera,
   Copy,
+  Link2,
   Loader2,
   MessageCircle,
   Trash2,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useTranslations } from 'next-intl';
+import { useSearchParams } from 'next/navigation';
 
 import { useAuth } from '@/hooks/use-auth';
 import type { MetaChannelProvider } from '@/lib/meta/messaging';
@@ -24,6 +26,14 @@ import {
 } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { SettingsPanelHead } from './settings-panel-head';
 
 interface PublicChannel {
@@ -32,6 +42,19 @@ interface PublicChannel {
   external_account_id: string;
   display_name: string | null;
   status: 'connected' | 'disconnected';
+}
+
+interface ZernioConnection {
+  id: string;
+  page_id: string;
+  page_name: string | null;
+  status: 'connected' | 'disconnected';
+  connected_at: string | null;
+}
+
+interface ZernioCredentialsForm {
+  apiKey: string;
+  webhookSecret: string;
 }
 
 interface ChannelForm {
@@ -64,19 +87,48 @@ function emptyForms(): Record<MetaChannelProvider, ChannelForm> {
   return { instagram: emptyForm(), messenger: emptyForm() };
 }
 
+function emptyZernioCredentials(): ZernioCredentialsForm {
+  return { apiKey: '', webhookSecret: '' };
+}
+
 function emptyChannels(): Record<MetaChannelProvider, PublicChannel | null> {
   return { instagram: null, messenger: null };
 }
 
 export function MetaChannelsConfig() {
   const t = useTranslations('Settings.meta');
+  const tz = useTranslations('Settings.zernio');
+  const searchParams = useSearchParams();
   const { canEditSettings, profileLoading } = useAuth();
   const [forms, setForms] = useState(emptyForms);
   const [channels, setChannels] = useState(emptyChannels);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState<MetaChannelProvider | null>(null);
   const [removing, setRemoving] = useState<MetaChannelProvider | null>(null);
+  const [removeTarget, setRemoveTarget] =
+    useState<MetaChannelProvider | null>(null);
   const [copied, setCopied] = useState(false);
+  const [zernio, setZernio] = useState<{
+    configured: boolean;
+    connection: ZernioConnection | null;
+  } | null>(null);
+  const [zernioLoading, setZernioLoading] = useState(true);
+  const [zernioConnecting, setZernioConnecting] = useState(false);
+  const [zernioSaving, setZernioSaving] = useState(false);
+  const [zernioCredentials, setZernioCredentials] = useState(
+    emptyZernioCredentials
+  );
+
+  useEffect(() => {
+    const result = searchParams.get('zernio');
+    if (!result) return;
+    if (result === 'connected') toast.success(tz('zernioConnectSuccess'));
+    else toast.error(tz('zernioConnectFailed'));
+
+    const url = new URL(window.location.href);
+    url.searchParams.delete('zernio');
+    window.history.replaceState({}, '', url.toString());
+  }, [searchParams, t, tz]);
 
   useEffect(() => {
     if (profileLoading) return;
@@ -124,6 +176,41 @@ export function MetaChannelsConfig() {
       cancelled = true;
     };
   }, [profileLoading, t]);
+
+  useEffect(() => {
+    if (profileLoading) return;
+    let cancelled = false;
+
+    (async () => {
+      setZernioLoading(true);
+      try {
+        const response = await fetch('/api/zernio/connection', {
+          cache: 'no-store',
+        });
+        const body = await response.json();
+        if (!response.ok) throw new Error(body.error || tz('zernioLoadFailed'));
+        if (!cancelled) {
+          setZernio({
+            configured: body.configured === true,
+            connection: body.connection ?? null,
+          });
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setZernio(null);
+          toast.error(
+            error instanceof Error ? error.message : tz('zernioLoadFailed')
+          );
+        }
+      } finally {
+        if (!cancelled) setZernioLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [profileLoading, t, tz]);
 
   function updateForm(
     provider: MetaChannelProvider,
@@ -180,10 +267,21 @@ export function MetaChannelsConfig() {
     }
   }
 
-  async function remove(provider: MetaChannelProvider) {
+  function requestRemove(provider: MetaChannelProvider) {
     if (!canEditSettings) return;
     const channel = channels[provider];
-    if (!channel || !window.confirm(t('removeConfirm'))) return;
+    if (!channel) return;
+    setRemoveTarget(provider);
+  }
+
+  async function remove() {
+    if (!canEditSettings || !removeTarget) return;
+    const provider = removeTarget;
+    const channel = channels[provider];
+    if (!channel) {
+      setRemoveTarget(null);
+      return;
+    }
 
     setRemoving(provider);
     try {
@@ -198,11 +296,72 @@ export function MetaChannelsConfig() {
 
       setChannels((current) => ({ ...current, [provider]: null }));
       updateForm(provider, emptyForm());
+      setRemoveTarget(null);
       toast.success(t('removeSuccess'));
     } catch (error) {
       toast.error(error instanceof Error ? error.message : t('removeFailed'));
     } finally {
       setRemoving(null);
+    }
+  }
+
+  async function connectZernio() {
+    if (!canEditSettings) return;
+    setZernioConnecting(true);
+    try {
+      const response = await fetch('/api/zernio/connect', {
+        cache: 'no-store',
+      });
+      const body = await response.json();
+      if (!response.ok || typeof body.auth_url !== 'string') {
+        throw new Error(body.error || tz('zernioConnectFailed'));
+      }
+      window.location.assign(body.auth_url);
+    } catch (error) {
+      setZernioConnecting(false);
+      toast.error(
+        error instanceof Error ? error.message : tz('zernioConnectFailed')
+      );
+    }
+  }
+
+  async function saveZernioConfig() {
+    if (!canEditSettings) return;
+    const apiKey = zernioCredentials.apiKey.trim();
+    const webhookSecret = zernioCredentials.webhookSecret.trim();
+    if (!apiKey || !webhookSecret) {
+      toast.error(tz('zernioCredentialsRequired'));
+      return;
+    }
+
+    setZernioSaving(true);
+    try {
+      const response = await fetch('/api/zernio/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          api_key: apiKey,
+          webhook_secret: webhookSecret,
+        }),
+      });
+      const body = await response.json();
+      if (!response.ok) {
+        throw new Error(body.error || tz('zernioSaveFailed'));
+      }
+
+      setZernio((current) => ({
+        configured: true,
+        connection: current?.connection ?? null,
+      }));
+      // Do not retain private credentials in React state after saving.
+      setZernioCredentials(emptyZernioCredentials());
+      toast.success(tz('zernioCredentialsSaved'));
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : tz('zernioSaveFailed')
+      );
+    } finally {
+      setZernioSaving(false);
     }
   }
 
@@ -225,6 +384,135 @@ export function MetaChannelsConfig() {
   return (
     <section className="animate-in fade-in-50 max-w-3xl duration-200">
       <SettingsPanelHead title={t('title')} description={t('description')} />
+
+      <Card className="mb-4">
+        <CardHeader>
+          <CardTitle className="text-foreground flex items-center gap-2">
+            <Link2 className="text-primary size-4" />
+            {tz('zernioTitle')}
+            {zernio?.connection ? (
+              <span className="text-primary ml-auto text-xs font-normal">
+                {zernio.connection.status === 'connected'
+                  ? t('configured')
+                  : t('disconnected')}
+              </span>
+            ) : null}
+          </CardTitle>
+          <CardDescription className="text-muted-foreground">
+            {tz('zernioDescription')}
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <p className="text-muted-foreground text-sm leading-relaxed">
+            {tz('zernioCredentialsHint')}
+          </p>
+          <div className="space-y-2">
+            <Label htmlFor="zernio-api-key" className="text-muted-foreground">
+              {tz('zernioApiKey')}
+            </Label>
+            <Input
+              id="zernio-api-key"
+              type="password"
+              value={zernioCredentials.apiKey}
+              onChange={(event) =>
+                setZernioCredentials((current) => ({
+                  ...current,
+                  apiKey: event.target.value,
+                }))
+              }
+              disabled={!canEditSettings || zernioSaving}
+              placeholder={tz('zernioApiKeyPlaceholder')}
+              autoComplete="new-password"
+              className="bg-muted border-border text-foreground placeholder:text-muted-foreground"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label
+              htmlFor="zernio-webhook-secret"
+              className="text-muted-foreground"
+            >
+              {tz('zernioWebhookSecret')}
+            </Label>
+            <Input
+              id="zernio-webhook-secret"
+              type="password"
+              value={zernioCredentials.webhookSecret}
+              onChange={(event) =>
+                setZernioCredentials((current) => ({
+                  ...current,
+                  webhookSecret: event.target.value,
+                }))
+              }
+              disabled={!canEditSettings || zernioSaving}
+              placeholder={tz('zernioWebhookSecretPlaceholder')}
+              autoComplete="new-password"
+              className="bg-muted border-border text-foreground placeholder:text-muted-foreground"
+            />
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => void saveZernioConfig()}
+            disabled={
+              profileLoading ||
+              zernioLoading ||
+              zernioSaving ||
+              !canEditSettings
+            }
+            className="border-border text-muted-foreground hover:bg-muted hover:text-foreground"
+          >
+            {zernioSaving ? <Loader2 className="size-4 animate-spin" /> : null}
+            {zernioSaving ? tz('zernioSaving') : tz('zernioSaveCredentials')}
+          </Button>
+          {zernioLoading ? (
+            <p className="text-muted-foreground flex items-center gap-2 text-sm">
+              <Loader2 className="size-4 animate-spin" /> {tz('zernioLoading')}
+            </p>
+          ) : zernio?.connection ? (
+            <div className="text-muted-foreground text-sm">
+              <div className="text-foreground font-medium">
+                {zernio.connection.page_name || tz('zernioFacebookPage')}
+              </div>
+              <div className="font-mono text-xs">
+                {zernio.connection.page_id}
+              </div>
+            </div>
+          ) : (
+            <p className="text-muted-foreground text-sm">
+              {zernio?.configured
+                ? tz('zernioNotConnected')
+                : tz('zernioNotConfigured')}
+            </p>
+          )}
+          <p className="text-muted-foreground text-xs leading-relaxed">
+            {tz('zernioSelectorHint')}
+          </p>
+          {!canEditSettings ? (
+            <p className="text-muted-foreground text-xs">{t('adminOnly')}</p>
+          ) : null}
+          <Button
+            type="button"
+            onClick={() => void connectZernio()}
+            disabled={
+              profileLoading ||
+              zernioLoading ||
+              zernioConnecting ||
+              zernioSaving ||
+              !zernio?.configured ||
+              !canEditSettings
+            }
+          >
+            {zernioConnecting ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : null}
+            {zernioConnecting
+              ? tz('zernioConnecting')
+              : zernio?.connection
+                ? tz('zernioReconnect')
+                : tz('zernioConnect')}
+          </Button>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>
@@ -410,7 +698,7 @@ export function MetaChannelsConfig() {
                     <Button
                       type="button"
                       variant="outline"
-                      onClick={() => void remove(id)}
+                      onClick={() => requestRemove(id)}
                       disabled={disabled}
                       className="border-red-900 text-red-400 hover:bg-red-950/40 hover:text-red-300"
                     >
@@ -428,6 +716,49 @@ export function MetaChannelsConfig() {
           );
         })}
       </div>
+
+      <Dialog
+        open={removeTarget !== null}
+        onOpenChange={(open) => {
+          if (!open && removing === null) setRemoveTarget(null);
+        }}
+      >
+        <DialogContent className="border-border bg-popover sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-popover-foreground">
+              {t('removeDialogTitle')}
+            </DialogTitle>
+            <DialogDescription className="text-muted-foreground">
+              {removeTarget
+                ? t('removeDialogDescription', {
+                    channel: t(removeTarget),
+                  })
+                : null}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => setRemoveTarget(null)}
+              disabled={removing !== null}
+            >
+              {t('cancel')}
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={() => void remove()}
+              disabled={removing !== null || removeTarget === null}
+            >
+              {removing !== null ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : null}
+              {removing !== null ? t('removing') : t('remove')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </section>
   );
 }

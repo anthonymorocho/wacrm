@@ -38,6 +38,7 @@ describe('/api/meta/channels', () => {
     single: vi.fn(),
     delete: vi.fn(),
     eq: vi.fn(),
+    or: vi.fn(),
     maybeSingle: vi.fn(),
     then: vi.fn(),
   };
@@ -50,6 +51,7 @@ describe('/api/meta/channels', () => {
       'single',
       'delete',
       'eq',
+      'or',
       'maybeSingle',
     ] as const) {
       builder[method].mockReturnValue(builder);
@@ -107,6 +109,9 @@ describe('/api/meta/channels', () => {
     expect(JSON.stringify(body)).not.toContain('encrypted-token');
     expect(mocks.requireRole).toHaveBeenCalledWith('viewer');
     expect(builder.eq).toHaveBeenCalledWith('account_id', 'account-1');
+    expect(builder.or).toHaveBeenCalledWith(
+      'integration_source.eq.meta,integration_source.is.null'
+    );
   });
 
   it('rejects unsupported providers before writing', async () => {
@@ -206,5 +211,8 @@ describe('/api/meta/channels', () => {
     expect(await response.json()).toEqual({ deleted: true });
     expect(builder.eq).toHaveBeenCalledWith('account_id', 'account-1');
     expect(builder.eq).toHaveBeenCalledWith('id', 'channel-1');
+    expect(builder.or).toHaveBeenCalledWith(
+      'integration_source.eq.meta,integration_source.is.null'
+    );
   });
 });

@@ -97,31 +97,34 @@ export function SettingsOverview({
         fetch('/api/account/members', { cache: 'no-store' }).then((r) =>
           r.json()
         ),
-          canManageMembers
-            ? fetch('/api/account/invitations', { cache: 'no-store' }).then((r) =>
-                r.json(),
-              )
-            : Promise.resolve(null),
-          supabase
-            .from('message_templates')
-            .select('id', { count: 'exact', head: true })
-            .eq('user_id', userId),
-          supabase
-            .from('message_templates')
-            .select('id', { count: 'exact', head: true })
-            .eq('user_id', userId)
-            .eq('status', 'PENDING'),
-          supabase
-            .from('tags')
-            .select('id', { count: 'exact', head: true })
-            .eq('user_id', userId),
-          supabase.from('custom_fields').select('id', { count: 'exact', head: true }),
-        ]);
+        canManageMembers
+          ? fetch('/api/account/invitations', { cache: 'no-store' }).then((r) =>
+              r.json()
+            )
+          : Promise.resolve(null),
+        supabase
+          .from('message_templates')
+          .select('id', { count: 'exact', head: true })
+          .eq('user_id', userId),
+        supabase
+          .from('message_templates')
+          .select('id', { count: 'exact', head: true })
+          .eq('user_id', userId)
+          .eq('status', 'PENDING'),
+        supabase
+          .from('tags')
+          .select('id', { count: 'exact', head: true })
+          .eq('user_id', userId),
+        supabase
+          .from('custom_fields')
+          .select('id', { count: 'exact', head: true }),
+      ]);
 
       if (cancelled) return;
 
       const members =
-        membersRes.status === 'fulfilled' && Array.isArray(membersRes.value?.members)
+        membersRes.status === 'fulfilled' &&
+        Array.isArray(membersRes.value?.members)
           ? membersRes.value.members.length
           : null;
       const pendingInvites =
@@ -161,11 +164,14 @@ export function SettingsOverview({
           .select('phone_number_id')
           .eq('account_id', acctId)
           .maybeSingle(),
-        fetch('/api/whatsapp/config', { cache: 'no-store' }).then((r) => r.json()),
+        fetch('/api/whatsapp/config', { cache: 'no-store' }).then((r) =>
+          r.json()
+        ),
       ]);
       if (cancelled) return;
       setWhatsapp({
-        configured: row.status === 'fulfilled' && !!row.value.data?.phone_number_id,
+        configured:
+          row.status === 'fulfilled' && !!row.value.data?.phone_number_id,
         connected: health.status === 'fulfilled' && !!health.value?.connected,
       });
       setWhatsappLoading(false);
@@ -176,14 +182,25 @@ export function SettingsOverview({
     // delay or change the existing WhatsApp status tile.
     (async () => {
       setSocialChannelsLoading(true);
-      try {
-        const response = await fetch('/api/meta/channels', {
-          cache: 'no-store',
-        });
-        const body: unknown = await response.json();
-        if (!response.ok) throw new Error('Failed to load Meta channels');
+      const [metaResult, zernioResult] = await Promise.allSettled([
+        fetch('/api/meta/channels', { cache: 'no-store' }).then(
+          async (response) => ({
+            ok: response.ok,
+            body: (await response.json()) as unknown,
+          })
+        ),
+        fetch('/api/zernio/connection', { cache: 'no-store' }).then(
+          async (response) => ({
+            ok: response.ok,
+            body: (await response.json()) as unknown,
+          })
+        ),
+      ]);
+      if (cancelled) return;
 
-        const next = emptySocialChannelStatuses();
+      const next = emptySocialChannelStatuses();
+      if (metaResult.status === 'fulfilled' && metaResult.value.ok) {
+        const body = metaResult.value.body;
         const bodyRecord =
           body && typeof body === 'object' && !Array.isArray(body)
             ? (body as { channels?: unknown })
@@ -210,13 +227,24 @@ export function SettingsOverview({
             connected: channel.status === 'connected',
           };
         }
-
-        if (!cancelled) setSocialChannels(next);
-      } catch {
-        if (!cancelled) setSocialChannels(emptySocialChannelStatuses());
-      } finally {
-        if (!cancelled) setSocialChannelsLoading(false);
       }
+
+      if (zernioResult.status === 'fulfilled' && zernioResult.value.ok) {
+        const body = zernioResult.value.body;
+        const connection =
+          body && typeof body === 'object' && !Array.isArray(body)
+            ? (body as { connection?: { status?: unknown } | null }).connection
+            : null;
+        if (connection) {
+          next.messenger = {
+            configured: true,
+            connected: connection.status === 'connected',
+          };
+        }
+      }
+
+      setSocialChannels(next);
+      setSocialChannelsLoading(false);
     })();
 
     return () => {
@@ -225,12 +253,15 @@ export function SettingsOverview({
   }, [user?.id, accountId, canManageMembers]);
 
   const displayName = profile?.full_name || profile?.email || t('yourAccount');
-  const initial = (profile?.full_name || profile?.email || 'U').charAt(0).toUpperCase();
+  const initial = (profile?.full_name || profile?.email || 'U')
+    .charAt(0)
+    .toUpperCase();
   const roleMeta = accountRole ? ROLE_META[accountRole] : null;
   const RoleIcon = roleMeta?.icon;
 
   const currencyLabel =
-    CURRENCIES.find((c) => c.code === defaultCurrency)?.label ?? defaultCurrency;
+    CURRENCIES.find((c) => c.code === defaultCurrency)?.label ??
+    defaultCurrency;
   const themeName = THEMES.find((t) => t.id === theme)?.name ?? theme;
   const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
@@ -383,7 +414,7 @@ export function SettingsOverview({
               onClick={() => onSelect(section)}
               className={cn(
                 'group border-border bg-card flex items-start gap-3.5 rounded-xl border p-4 text-left transition-colors',
-                'hover:border-primary-soft-2 hover:bg-card-2',
+                'hover:border-primary-soft-2 hover:bg-card-2'
               )}
             >
               <span className="bg-primary-soft text-primary flex size-9 shrink-0 items-center justify-center rounded-lg">

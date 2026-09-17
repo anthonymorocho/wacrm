@@ -30,6 +30,7 @@ let rows: Record<string, unknown>[] = [];
 function setupAdmin() {
   const builder: Record<string, unknown> = {};
   builder.select = vi.fn(() => builder);
+  builder.eq = vi.fn(() => builder);
   builder.then = (
     resolve: (value: unknown) => unknown,
     reject?: (reason: unknown) => unknown

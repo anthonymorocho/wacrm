@@ -316,6 +316,11 @@ export interface MetaChannel {
   user_id: string;
   provider: MetaChannelProvider;
   external_account_id: string;
+  /** `meta` uses Meta webhooks; `zernio` uses the Zernio inbox webhook. */
+  integration_source?: 'meta' | 'zernio';
+  zernio_profile_id?: string | null;
+  zernio_account_id?: string | null;
+  facebook_page_id?: string | null;
   display_name?: string | null;
   status: 'connected' | 'disconnected';
   connected_at?: string | null;

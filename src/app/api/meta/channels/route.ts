@@ -32,6 +32,10 @@ export async function GET() {
       .from('meta_channels')
       .select(PUBLIC_CHANNEL_FIELDS)
       .eq('account_id', accountId)
+      // Rows created before the source discriminator was introduced are
+      // direct Meta channels too. Keep them visible so they can be cleaned up
+      // from this screen; Zernio rows always carry an explicit `zernio` value.
+      .or('integration_source.eq.meta,integration_source.is.null')
       .order('provider', { ascending: true })
       .order('display_name', { ascending: true });
 
@@ -100,6 +104,7 @@ export async function POST(request: Request) {
         {
           account_id: accountId,
           user_id: userId,
+          integration_source: 'meta',
           provider: config.provider,
           external_account_id: config.external_account_id,
           display_name: config.display_name ?? null,
@@ -142,6 +147,9 @@ export async function DELETE(request: Request) {
       .from('meta_channels')
       .delete()
       .eq('account_id', accountId)
+      // Include legacy direct-Meta rows whose source is still NULL, but never
+      // allow this route to delete a channel owned by the Zernio flow.
+      .or('integration_source.eq.meta,integration_source.is.null')
       .eq('id', channelId)
       .select('id')
       .maybeSingle();

@@ -25,7 +25,8 @@ const CHANNEL_FIELDS =
 async function loadChannels(): Promise<StoredMetaChannel[]> {
   const { data, error } = await supabaseAdmin()
     .from('meta_channels')
-    .select(CHANNEL_FIELDS);
+    .select(CHANNEL_FIELDS)
+    .eq('integration_source', 'meta');
   if (error) throw error;
 
   return (data ?? [])

@@ -8,9 +8,10 @@ import {
 } from '@/lib/zernio/connection';
 import { getFacebookPageSelection } from '@/lib/zernio/client';
 import { getZernioCredentials, getZernioProfile } from '@/lib/zernio/profile';
+import { publicOrigin } from '@/lib/zernio/public-origin';
 
 function settingsRedirect(request: Request, result: 'connected' | 'error') {
-  const url = new URL('/settings', request.url);
+  const url = new URL('/settings', publicOrigin(request));
   url.searchParams.set('tab', 'meta');
   url.searchParams.set('zernio', result);
   return NextResponse.redirect(url);

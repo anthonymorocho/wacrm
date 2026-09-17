@@ -88,6 +88,21 @@ const message: NormalizedMetaMessage = {
 const contact = { id: 'contact-1', name: 'Ana', phone: null };
 const conversation = { id: 'conversation-1', status: 'open', unread_count: 2 };
 
+const zernioChannel: MetaChannel = {
+  ...channel,
+  provider: 'messenger',
+  integration_source: 'zernio',
+  external_account_id: 'facebook-page-1',
+};
+
+const zernioMessage: NormalizedMetaMessage = {
+  ...message,
+  provider: 'messenger',
+  externalAccountId: 'zernio-account-1',
+  externalConversationId: 'zernio-conversation-1',
+  messageId: 'zernio-message-1',
+};
+
 describe('processNormalizedMetaMessage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -205,6 +220,37 @@ describe('processNormalizedMetaMessage', () => {
         (call) => call.table === 'conversations' && call.method === 'insert'
       )
     ).toBe(false);
+  });
+
+  it('stores the provider conversation id for Zernio replies', async () => {
+    const { db, calls } = fakeDatabase({
+      meta_contact_identities: [
+        { data: { contact_id: contact.id }, error: null },
+      ],
+      contacts: [{ data: contact, error: null }],
+      conversations: [
+        { data: null, error: null },
+        { data: conversation, error: null },
+      ],
+      messages: [{ data: null, error: null }],
+    });
+
+    expect(
+      await processNormalizedMetaMessage(db, zernioChannel, zernioMessage)
+    ).toBe('inserted');
+    expect(calls).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          table: 'conversations',
+          method: 'insert',
+          args: [
+            expect.objectContaining({
+              zernio_conversation_id: 'zernio-conversation-1',
+            }),
+          ],
+        }),
+      ])
+    );
   });
 
   it('treats a repeated provider message id as a successful duplicate', async () => {

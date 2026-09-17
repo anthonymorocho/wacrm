@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   requireRole: vi.fn(),
@@ -48,6 +48,10 @@ describe('/api/zernio/callback', () => {
       pageName: 'Acme Page',
     });
     mocks.saveZernioMessengerConnection.mockResolvedValue({});
+  });
+
+  afterEach(() => {
+    delete process.env.NEXT_PUBLIC_SITE_URL;
   });
 
   it('stores the page selected in Zernio and returns to Meta settings', async () => {
@@ -113,5 +117,20 @@ describe('/api/zernio/callback', () => {
       'zernio=error'
     );
     expect(mocks.requireRole).not.toHaveBeenCalled();
+  });
+
+  it('uses the configured public origin when the callback request has an internal host', async () => {
+    process.env.NEXT_PUBLIC_SITE_URL = 'https://crm.example.com';
+
+    const response = await GET(
+      new Request(
+        'http://0.0.0.0/api/zernio/callback?error=oauth_denied&platform=facebook',
+        { method: 'GET' }
+      )
+    );
+
+    expect(response.headers.get('location')).toMatch(
+      /^https:\/\/crm\.example\.com\/settings\?/
+    );
   });
 });

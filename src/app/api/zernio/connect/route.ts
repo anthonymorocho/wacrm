@@ -8,26 +8,7 @@ import {
   getZernioConnectUrl,
 } from '@/lib/zernio/client';
 import { getZernioCredentials, getZernioProfile } from '@/lib/zernio/profile';
-
-function publicOrigin(request: Request): string {
-  const configured = process.env.NEXT_PUBLIC_SITE_URL?.trim();
-  if (configured) return configured.replace(/\/+$/, '');
-
-  const forwardedHost = request.headers
-    .get('x-forwarded-host')
-    ?.split(',')[0]
-    ?.trim();
-  const host = forwardedHost || request.headers.get('host')?.trim();
-  if (host) {
-    const forwardedProto = request.headers
-      .get('x-forwarded-proto')
-      ?.split(',')[0]
-      ?.trim();
-    return `${forwardedProto || new URL(request.url).protocol.replace(':', '')}://${host}`;
-  }
-
-  return new URL(request.url).origin;
-}
+import { publicOrigin } from '@/lib/zernio/public-origin';
 
 /** GET /api/zernio/connect — start Zernio's hosted Facebook Page picker. */
 export async function GET(request: Request) {

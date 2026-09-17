@@ -6,6 +6,7 @@ describe('parseZernioMessage', () => {
   it('normalizes an incoming Facebook message for the shared Meta inbox', () => {
     const message = parseZernioMessage({
       event: 'message.received',
+      conversation: { id: 'zernio-conversation-1' },
       message: {
         platform: 'facebook',
         direction: 'incoming',
@@ -25,6 +26,7 @@ describe('parseZernioMessage', () => {
       externalAccountId: 'zernio-account-1',
       senderId: 'customer-7',
       senderName: 'Ana',
+      externalConversationId: 'zernio-conversation-1',
       messageId: 'mid-123',
       timestamp: '2026-09-17T12:00:00.000Z',
       contentType: 'text',

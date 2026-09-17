@@ -5,8 +5,8 @@
 //
 // Given a conversation and message params, this:
 //   1. validates the params for the message type,
-//   2. loads the conversation + contact + WhatsApp config,
-//   3. sends to Meta (with phone-variant retry + contact auto-fix),
+//   2. loads the conversation + contact + channel configuration,
+//   3. sends to Meta or Zernio (with phone-variant retry for WhatsApp),
 //   4. persists the message + updates the conversation,
 //   5. pauses any active Flow run for the contact (agent stepped in).
 //
@@ -20,6 +20,7 @@
 // ============================================================
 
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { randomUUID } from 'node:crypto';
 
 import {
   sendTextMessage,
@@ -45,6 +46,12 @@ import {
 import type { MessageTemplate } from '@/types';
 import { isMessageTemplate } from '@/lib/whatsapp/template-row-guard';
 import { renderTemplateBody } from './template-message-text';
+import {
+  listZernioInboxConversations,
+  sendZernioInboxMessage,
+} from '@/lib/zernio/client';
+import { getZernioConnection } from '@/lib/zernio/connection';
+import { getZernioCredentials } from '@/lib/zernio/profile';
 
 export const MEDIA_KINDS = ['image', 'video', 'document', 'audio'] as const;
 export const VALID_MESSAGE_TYPES = [
@@ -92,7 +99,7 @@ export interface SendMessageParams {
 export interface SendMessageResult {
   /** Our `messages.id` (the persisted row). */
   messageId: string;
-  /** Meta's `wamid` for the delivered message. */
+  /** Provider message id for the delivered message. */
   whatsappMessageId: string;
 }
 
@@ -104,8 +111,11 @@ export interface AgentMessageInsertParams {
   mediaUrl?: string | null;
   templateName?: string | null;
   interactivePayload?: InteractiveMessagePayload | null;
+  /** Provider message id; the field name is retained for API compatibility. */
   whatsappMessageId: string;
   replyToMessageId?: string | null;
+  channel?: 'whatsapp' | 'instagram' | 'messenger';
+  channelId?: string | null;
 }
 
 /** Build the one persisted row for a human dashboard send. */
@@ -119,6 +129,8 @@ export function buildAgentMessageInsert({
   interactivePayload,
   whatsappMessageId,
   replyToMessageId,
+  channel = 'whatsapp',
+  channelId,
 }: AgentMessageInsertParams): Record<string, unknown> {
   return {
     conversation_id: conversationId,
@@ -130,6 +142,8 @@ export function buildAgentMessageInsert({
     template_name: templateName || null,
     interactive_payload: interactivePayload ?? null,
     message_id: whatsappMessageId,
+    channel,
+    channel_id: channelId ?? null,
     status: 'sent',
     reply_to_message_id: replyToMessageId || null,
   };
@@ -227,6 +241,90 @@ export function validateSendMessageParams(params: {
   }
 }
 
+interface ZernioMessengerConversation {
+  id: string;
+  channel_id: string;
+  zernio_conversation_id?: string | null;
+  contact: { id: string };
+}
+
+/**
+ * Recover the provider conversation id for a thread created before the
+ * webhook started persisting it. The lookup is account-scoped and matches
+ * the social identity, never a user-controlled conversation id.
+ */
+async function resolveZernioConversationId(
+  db: SupabaseClient,
+  accountId: string,
+  conversation: ZernioMessengerConversation,
+  zernioAccountId: string,
+  apiKey: string
+): Promise<string> {
+  const stored = conversation.zernio_conversation_id?.trim();
+  if (stored) return stored;
+
+  const { data: identity, error: identityError } = await db
+    .from('meta_contact_identities')
+    .select('external_user_id')
+    .eq('channel_id', conversation.channel_id)
+    .eq('contact_id', conversation.contact.id)
+    .maybeSingle();
+  if (identityError) {
+    throw new SendMessageError(
+      'db_error',
+      'Could not resolve the Facebook conversation participant',
+      500
+    );
+  }
+
+  const participantId =
+    identity && typeof identity.external_user_id === 'string'
+      ? identity.external_user_id
+      : null;
+  if (!participantId) {
+    throw new SendMessageError(
+      'zernio_conversation_missing',
+      'This Facebook conversation has no Zernio conversation id. Receive a new message from the customer first.',
+      400
+    );
+  }
+
+  const conversations = await listZernioInboxConversations({
+    apiKey,
+    accountId: zernioAccountId,
+    platform: 'facebook',
+    limit: 100,
+  });
+  const match = conversations.find(
+    (candidate) =>
+      candidate.accountId === zernioAccountId &&
+      candidate.platform === 'facebook' &&
+      candidate.participantId === participantId
+  );
+  if (!match) {
+    throw new SendMessageError(
+      'zernio_conversation_missing',
+      'Zernio could not find this Facebook conversation. Receive a new message from the customer first.',
+      400
+    );
+  }
+
+  const { error: updateError } = await db
+    .from('conversations')
+    .update({ zernio_conversation_id: match.id })
+    .eq('id', conversation.id)
+    .eq('account_id', accountId);
+  if (updateError) {
+    throw new SendMessageError(
+      'db_error',
+      'Zernio conversation was found but could not be linked to the CRM thread',
+      500
+    );
+  }
+
+  return match.id;
+}
+
 export async function sendMessageToConversation(
   db: SupabaseClient,
   accountId: string,
@@ -278,54 +376,55 @@ export async function sendMessageToConversation(
   }
 
   const contact = conversation.contact;
-  if (!contact?.phone) {
+  if (!contact?.id) {
     throw new SendMessageError(
       'bad_request',
-      'Contact phone number not found',
+      'Conversation contact not found',
       400
     );
   }
 
-  const sanitizedPhone = sanitizePhoneForMeta(contact.phone);
-  if (!isValidE164(sanitizedPhone)) {
-    throw new SendMessageError(
-      'bad_request',
-      'Invalid phone number format',
-      400
-    );
-  }
+  // Social channels use their own provider transport. Resolve the source
+  // from the account-owned channel row instead of trusting only the
+  // conversation's display channel value.
+  const conversationChannel = conversation.channel as
+    'whatsapp' | 'instagram' | 'messenger' | undefined;
+  let isZernioMessenger = false;
+  if (conversationChannel === 'messenger') {
+    if (
+      typeof conversation.channel_id !== 'string' ||
+      !conversation.channel_id
+    ) {
+      throw new SendMessageError(
+        'unsupported_channel',
+        'This Messenger conversation is missing its configured channel',
+        400
+      );
+    }
 
-  // WhatsApp config, account-scoped.
-  const { data: config, error: configError } = await db
-    .from('whatsapp_config')
-    .select('*')
-    .eq('account_id', accountId)
-    .single();
+    const { data: channel, error: channelError } = await db
+      .from('meta_channels')
+      .select('integration_source, provider, status')
+      .eq('id', conversation.channel_id)
+      .eq('account_id', accountId)
+      .maybeSingle();
+    if (channelError) throw channelError;
 
-  if (configError || !config) {
-    throw new SendMessageError(
-      'whatsapp_not_configured',
-      'WhatsApp not configured. Please set up your WhatsApp integration first.',
-      400
-    );
-  }
-
-  const accessToken = decrypt(config.access_token);
-
-  // Self-heal legacy CBC ciphertexts. Fire-and-forget; idempotent.
-  if (isLegacyFormat(config.access_token)) {
-    void db
-      .from('whatsapp_config')
-      .update({ access_token: encrypt(accessToken) })
-      .eq('id', config.id)
-      .then(({ error }: { error: { message: string } | null }) => {
-        if (error) {
-          console.warn(
-            '[send-message] access_token GCM upgrade failed:',
-            error.message
-          );
-        }
-      });
+    if (channel?.integration_source !== 'zernio') {
+      throw new SendMessageError(
+        'unsupported_channel',
+        'Direct Messenger replies are not configured. Connect this Facebook Page through Zernio.',
+        400
+      );
+    }
+    isZernioMessenger = true;
+    if (messageType !== 'text') {
+      throw new SendMessageError(
+        'unsupported_message_type',
+        'Zernio Messenger currently supports text replies only.',
+        400
+      );
+    }
   }
 
   // Resolve the reply target to its Meta message_id. The parent must
@@ -359,7 +458,7 @@ export async function sendMessageToConversation(
   // Template row (for header + button components). isMessageTemplate
   // guards against a malformed local row crashing the send-builder.
   let templateRow: MessageTemplate | null = null;
-  if (messageType === 'template' && templateName) {
+  if (!isZernioMessenger && messageType === 'template' && templateName) {
     const { data } = await db
       .from('message_templates')
       .select('*')
@@ -377,115 +476,224 @@ export async function sendMessageToConversation(
     templateRow = data ?? null;
   }
 
-  const attempt = async (phone: string): Promise<string> => {
-    if (messageType === 'template') {
-      const result = await sendTemplateMessage({
-        phoneNumberId: config.phone_number_id,
-        accessToken,
-        to: phone,
-        templateName: templateName!,
-        language: templateLanguage || 'en_US',
-        template: templateRow ?? undefined,
-        messageParams: templateMessageParams ?? undefined,
-        params: templateParams || [],
-        contextMessageId,
-      });
-      return result.messageId;
+  let providerMessageId = '';
+
+  if (isZernioMessenger) {
+    const admin = supabaseAdmin();
+    const [connection, credentials] = await Promise.all([
+      getZernioConnection(admin, accountId),
+      getZernioCredentials(admin, accountId),
+    ]);
+    if (!connection || connection.status !== 'connected') {
+      throw new SendMessageError(
+        'zernio_not_configured',
+        'Zernio Messenger is not connected for this account.',
+        400
+      );
     }
-    if (isMediaKind) {
-      const result = await sendMediaMessage({
-        phoneNumberId: config.phone_number_id,
-        accessToken,
-        to: phone,
-        kind: messageType as MediaKind,
-        link: mediaUrl!,
-        caption: contentText || undefined,
-        filename: filename || undefined,
-        contextMessageId,
-      });
-      return result.messageId;
+    if (!credentials) {
+      throw new SendMessageError(
+        'zernio_not_configured',
+        'Zernio credentials are missing. Configure the API key and webhook secret first.',
+        400
+      );
     }
-    if (messageType === 'interactive') {
-      const p = interactivePayload!;
-      if (p.kind === 'buttons') {
-        const result = await sendInteractiveButtons({
+
+    let zernioConversationId: string;
+    try {
+      zernioConversationId = await resolveZernioConversationId(
+        db,
+        accountId,
+        conversation as ZernioMessengerConversation,
+        connection.zernio_account_id,
+        credentials.apiKey
+      );
+      const result = await sendZernioInboxMessage({
+        apiKey: credentials.apiKey,
+        accountId: connection.zernio_account_id,
+        conversationId: zernioConversationId,
+        message: contentText!,
+        idempotencyKey: `wacrm-${accountId}-${conversationId}-${randomUUID()}`,
+      });
+      providerMessageId = result.messageId;
+    } catch (err) {
+      if (err instanceof SendMessageError) throw err;
+      const detail =
+        err instanceof Error ? err.message : 'Unknown Zernio API error';
+      console.error('[send-message] Zernio send failed:', detail);
+      throw new SendMessageError(
+        'zernio_error',
+        `Zernio API error: ${detail}`,
+        502
+      );
+    }
+  } else {
+    if (!contact.phone) {
+      throw new SendMessageError(
+        'bad_request',
+        'Contact phone number not found',
+        400
+      );
+    }
+
+    const sanitizedPhone = sanitizePhoneForMeta(contact.phone);
+    if (!isValidE164(sanitizedPhone)) {
+      throw new SendMessageError(
+        'bad_request',
+        'Invalid phone number format',
+        400
+      );
+    }
+
+    // WhatsApp config, account-scoped.
+    const { data: config, error: configError } = await db
+      .from('whatsapp_config')
+      .select('*')
+      .eq('account_id', accountId)
+      .single();
+
+    if (configError || !config) {
+      throw new SendMessageError(
+        'whatsapp_not_configured',
+        'WhatsApp not configured. Please set up your WhatsApp integration first.',
+        400
+      );
+    }
+
+    const accessToken = decrypt(config.access_token);
+
+    // Self-heal legacy CBC ciphertexts. Fire-and-forget; idempotent.
+    if (isLegacyFormat(config.access_token)) {
+      void db
+        .from('whatsapp_config')
+        .update({ access_token: encrypt(accessToken) })
+        .eq('id', config.id)
+        .then(({ error }: { error: { message: string } | null }) => {
+          if (error) {
+            console.warn(
+              '[send-message] access_token GCM upgrade failed:',
+              error.message
+            );
+          }
+        });
+    }
+
+    const attempt = async (phone: string): Promise<string> => {
+      if (messageType === 'template') {
+        const result = await sendTemplateMessage({
           phoneNumberId: config.phone_number_id,
           accessToken,
           to: phone,
-          bodyText: p.body,
-          headerText: p.header || undefined,
-          footerText: p.footer || undefined,
-          buttons: p.buttons,
+          templateName: templateName!,
+          language: templateLanguage || 'en_US',
+          template: templateRow ?? undefined,
+          messageParams: templateMessageParams ?? undefined,
+          params: templateParams || [],
           contextMessageId,
         });
         return result.messageId;
       }
-      const result = await sendInteractiveList({
+      if (isMediaKind) {
+        const result = await sendMediaMessage({
+          phoneNumberId: config.phone_number_id,
+          accessToken,
+          to: phone,
+          kind: messageType as MediaKind,
+          link: mediaUrl!,
+          caption: contentText || undefined,
+          filename: filename || undefined,
+          contextMessageId,
+        });
+        return result.messageId;
+      }
+      if (messageType === 'interactive') {
+        const p = interactivePayload!;
+        if (p.kind === 'buttons') {
+          const result = await sendInteractiveButtons({
+            phoneNumberId: config.phone_number_id,
+            accessToken,
+            to: phone,
+            bodyText: p.body,
+            headerText: p.header || undefined,
+            footerText: p.footer || undefined,
+            buttons: p.buttons,
+            contextMessageId,
+          });
+          return result.messageId;
+        }
+        const result = await sendInteractiveList({
+          phoneNumberId: config.phone_number_id,
+          accessToken,
+          to: phone,
+          bodyText: p.body,
+          buttonLabel: p.button_label,
+          headerText: p.header || undefined,
+          footerText: p.footer || undefined,
+          sections: p.sections,
+          contextMessageId,
+        });
+        return result.messageId;
+      }
+      const result = await sendTextMessage({
         phoneNumberId: config.phone_number_id,
         accessToken,
         to: phone,
-        bodyText: p.body,
-        buttonLabel: p.button_label,
-        headerText: p.header || undefined,
-        footerText: p.footer || undefined,
-        sections: p.sections,
+        text: contentText!,
         contextMessageId,
       });
       return result.messageId;
-    }
-    const result = await sendTextMessage({
-      phoneNumberId: config.phone_number_id,
-      accessToken,
-      to: phone,
-      text: contentText!,
-      contextMessageId,
-    });
-    return result.messageId;
-  };
+    };
 
-  // Send via Meta — retry across phone-number variants if Meta rejects
-  // with "recipient not in allowed list"; persist a working variant
-  // back to the contact so the next send goes straight through.
-  let waMessageId = '';
-  let workingPhone = sanitizedPhone;
-  try {
-    const variants = phoneVariants(sanitizedPhone);
-    let lastError: unknown = null;
+    // Send via Meta — retry across phone-number variants if Meta rejects
+    // with "recipient not in allowed list"; persist a working variant
+    // back to the contact so the next send goes straight through.
+    let workingPhone = sanitizedPhone;
+    try {
+      const variants = phoneVariants(sanitizedPhone);
+      let lastError: unknown = null;
 
-    for (const variant of variants) {
-      try {
-        waMessageId = await attempt(variant);
-        workingPhone = variant;
-        lastError = null;
-        break;
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        if (!isRecipientNotAllowedError(message)) {
-          throw err;
+      for (const variant of variants) {
+        try {
+          providerMessageId = await attempt(variant);
+          workingPhone = variant;
+          lastError = null;
+          break;
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          if (!isRecipientNotAllowedError(message)) {
+            throw err;
+          }
+          lastError = err;
+          console.warn(
+            `[send-message] variant "${variant}" rejected by Meta, trying next…`
+          );
         }
-        lastError = err;
-        console.warn(
-          `[send-message] variant "${variant}" rejected by Meta, trying next…`
-        );
       }
+
+      if (lastError) throw lastError;
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : 'Unknown Meta API error';
+      console.error(
+        '[send-message] Meta send failed for all variants:',
+        message
+      );
+      throw new SendMessageError(
+        'meta_error',
+        `Meta API error: ${message}`,
+        502
+      );
     }
 
-    if (lastError) throw lastError;
-  } catch (err) {
-    const message =
-      err instanceof Error ? err.message : 'Unknown Meta API error';
-    console.error('[send-message] Meta send failed for all variants:', message);
-    throw new SendMessageError('meta_error', `Meta API error: ${message}`, 502);
-  }
-
-  if (workingPhone !== sanitizedPhone) {
-    console.log(
-      `[send-message] Auto-corrected contact phone: ${sanitizedPhone} → ${workingPhone}`
-    );
-    await db
-      .from('contacts')
-      .update({ phone: workingPhone })
-      .eq('id', contact.id);
+    if (workingPhone !== sanitizedPhone) {
+      console.log(
+        `[send-message] Auto-corrected contact phone: ${sanitizedPhone} → ${workingPhone}`
+      );
+      await db
+        .from('contacts')
+        .update({ phone: workingPhone })
+        .eq('id', contact.id);
+    }
   }
 
   // Persist the sent message. Field names MUST match the messages
@@ -531,8 +739,10 @@ export async function sendMessageToConversation(
         templateName,
         interactivePayload:
           messageType === 'interactive' ? interactivePayload : null,
-        whatsappMessageId: waMessageId,
+        whatsappMessageId: providerMessageId,
         replyToMessageId,
+        channel: conversationChannel || 'whatsapp',
+        channelId: conversation.channel_id ?? null,
       })
     )
     .select()
@@ -542,7 +752,7 @@ export async function sendMessageToConversation(
     console.error('[send-message] error inserting sent message:', msgError);
     throw new SendMessageError(
       'db_error',
-      `Message sent to Meta but failed to save to DB: ${msgError.message}`,
+      `Message sent to the provider but failed to save to DB: ${msgError.message}`,
       500
     );
   }
@@ -584,5 +794,8 @@ export async function sendMessageToConversation(
     );
   }
 
-  return { messageId: messageRecord.id, whatsappMessageId: waMessageId };
+  return {
+    messageId: messageRecord.id,
+    whatsappMessageId: providerMessageId,
+  };
 }

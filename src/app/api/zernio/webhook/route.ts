@@ -14,8 +14,12 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function isHandledEvent(
   value: unknown
-): value is 'message.received' | 'account.disconnected' {
-  return value === 'message.received' || value === 'account.disconnected';
+): value is 'message.received' | 'comment.received' | 'account.disconnected' {
+  return (
+    value === 'message.received' ||
+    value === 'comment.received' ||
+    value === 'account.disconnected'
+  );
 }
 
 /** POST /api/zernio/webhook — signed, at-least-once Zernio deliveries. */

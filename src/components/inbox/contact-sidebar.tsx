@@ -8,6 +8,7 @@ import { cn } from '@/lib/utils';
 import { addContactTag, deleteContactTag } from '@/lib/contacts/tag-api';
 import {
   moveDealToPipeline,
+  shouldShowAdditionalPipelineAssignment,
   toggleTagId,
 } from '@/lib/inbox/contact-sidebar-state';
 import { toast } from 'sonner';
@@ -30,6 +31,7 @@ import {
   Plus,
   GitBranch,
   Loader2,
+  X,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -70,6 +72,7 @@ export function ContactSidebar({
   const [addPipelineId, setAddPipelineId] = useState('');
   const [addStageId, setAddStageId] = useState('');
   const [addingDeal, setAddingDeal] = useState(false);
+  const [addPipelineOpen, setAddPipelineOpen] = useState(false);
   const [newNote, setNewNote] = useState('');
   const [addingNote, setAddingNote] = useState(false);
 
@@ -463,9 +466,32 @@ export function ContactSidebar({
                 <GitBranch className="h-3 w-3" />
                 {tSidebar('funnels')}
               </div>
-              {deals.length > 0 && (
-                <DollarSign className="text-muted-foreground h-3 w-3" />
-              )}
+              <div className="flex items-center gap-1.5">
+                {deals.length > 0 && (
+                  <DollarSign className="text-muted-foreground h-3 w-3" />
+                )}
+                {deals.length > 0 && canEditContact && pipelines.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setAddPipelineOpen((previous) => !previous)}
+                    aria-expanded={addPipelineOpen}
+                    aria-controls="contact-sidebar-add-pipeline"
+                    aria-label={tSidebar(
+                      addPipelineOpen ? 'cancelAddFunnel' : 'addAnotherFunnel'
+                    )}
+                    title={tSidebar(
+                      addPipelineOpen ? 'cancelAddFunnel' : 'addAnotherFunnel'
+                    )}
+                    className="text-muted-foreground hover:bg-muted hover:text-foreground flex h-5 w-5 items-center justify-center rounded"
+                  >
+                    {addPipelineOpen ? (
+                      <X className="h-3.5 w-3.5" />
+                    ) : (
+                      <Plus className="h-3.5 w-3.5" />
+                    )}
+                  </button>
+                )}
+              </div>
             </div>
             <div className="mt-2 space-y-2">
               {deals.length === 0 ? (
@@ -551,21 +577,30 @@ export function ContactSidebar({
                   </div>
                 ))
               )}
-              {deals.length > 0 && canEditContact && pipelines.length > 0 && (
-                <PipelineAssignment
-                  pipelines={pipelines}
-                  stagesByPipeline={stagesByPipeline}
-                  pipelineId={addPipelineId}
-                  stageId={addStageId}
-                  onPipelineChange={(pipelineId) => {
-                    setAddPipelineId(pipelineId);
-                    setAddStageId(stagesByPipeline[pipelineId]?.[0]?.id ?? '');
-                  }}
-                  onStageChange={setAddStageId}
-                  onAdd={() => void handleAddToPipeline()}
-                  disabled={addingDeal}
-                  t={tSidebar}
-                />
+              {shouldShowAdditionalPipelineAssignment(
+                deals.length,
+                canEditContact,
+                pipelines.length,
+                addPipelineOpen
+              ) && (
+                <div id="contact-sidebar-add-pipeline">
+                  <PipelineAssignment
+                    pipelines={pipelines}
+                    stagesByPipeline={stagesByPipeline}
+                    pipelineId={addPipelineId}
+                    stageId={addStageId}
+                    onPipelineChange={(pipelineId) => {
+                      setAddPipelineId(pipelineId);
+                      setAddStageId(
+                        stagesByPipeline[pipelineId]?.[0]?.id ?? ''
+                      );
+                    }}
+                    onStageChange={setAddStageId}
+                    onAdd={() => void handleAddToPipeline()}
+                    disabled={addingDeal}
+                    t={tSidebar}
+                  />
+                </div>
               )}
             </div>
           </div>

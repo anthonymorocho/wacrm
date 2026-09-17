@@ -20,3 +20,13 @@ export function moveDealToPipeline(
       : deal
   );
 }
+
+/** Show the optional second funnel only after the user asks to add it. */
+export function shouldShowAdditionalPipelineAssignment(
+  dealCount: number,
+  canEditContact: boolean,
+  pipelineCount: number,
+  isOpen: boolean
+): boolean {
+  return dealCount > 0 && canEditContact && pipelineCount > 0 && isOpen;
+}

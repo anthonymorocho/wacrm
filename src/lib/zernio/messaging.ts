@@ -5,6 +5,8 @@ export interface NormalizedZernioMessage {
   externalAccountId: string;
   senderId: string;
   senderName: string | null;
+  /** Zernio's conversation id used by the outbound inbox API. */
+  externalConversationId: string | null;
   messageId: string;
   timestamp: string;
   contentType: ContentType;
@@ -64,6 +66,16 @@ export function parseZernioMessage(
   }
 
   const externalAccountId = nonEmptyString(account.accountId);
+  const conversation = isRecord(payload.conversation)
+    ? payload.conversation
+    : null;
+  const messageConversation = isRecord(message.conversation)
+    ? message.conversation
+    : null;
+  const externalConversationId =
+    nonEmptyString(conversation?.id) ??
+    nonEmptyString(message.conversationId) ??
+    nonEmptyString(messageConversation?.id);
   const sender = isRecord(message.sender) ? message.sender : null;
   const senderId = nonEmptyString(sender?.id);
   const messageId = nonEmptyString(message.platformMessageId);
@@ -87,6 +99,7 @@ export function parseZernioMessage(
     senderId,
     senderName:
       nonEmptyString(sender?.name) ?? nonEmptyString(sender?.username),
+    externalConversationId,
     messageId,
     timestamp,
     contentType,

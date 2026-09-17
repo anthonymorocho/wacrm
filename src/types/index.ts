@@ -179,6 +179,8 @@ export interface Conversation {
   channel?: 'whatsapp' | 'instagram' | 'messenger';
   /** Configured social channel id; null for legacy WhatsApp rows. */
   channel_id?: string | null;
+  /** Zernio inbox conversation id for Messenger channels. */
+  zernio_conversation_id?: string | null;
   contact?: Contact;
   /**
    * AI auto-reply state for this thread (migration 029 + 033):

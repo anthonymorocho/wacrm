@@ -6,6 +6,7 @@ import type { MetaChannel } from '@/types';
 import { supabaseAdmin } from '@/lib/meta/admin-client';
 
 import { parseZernioMessage } from './messaging';
+import { persistZernioCommentEvent, parseZernioCommentEvent } from './comments';
 
 interface ZernioAccountRef {
   accountId: string;
@@ -24,7 +25,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function readAccountRef(payload: unknown): ZernioAccountRef | null {
   if (!isRecord(payload) || !isRecord(payload.account)) return null;
-  const accountId = payload.account.accountId;
+  const accountId = payload.account.accountId ?? payload.account.id;
   const profileId = payload.account.profileId;
   if (typeof accountId !== 'string' || typeof profileId !== 'string') {
     return null;
@@ -80,6 +81,18 @@ export async function processZernioEvent(
   if (isRecord(payload) && payload.event === 'account.disconnected') {
     await markDisconnected(db, connection);
     return 'disconnected';
+  }
+
+  if (isRecord(payload) && payload.event === 'comment.received') {
+    const comment = parseZernioCommentEvent(payload);
+    if (!comment || connection.status !== 'connected') return 'ignored';
+    await persistZernioCommentEvent(db, {
+      accountId: connection.account_id,
+      zernioAccountId: account.accountId,
+      metaChannelId: connection.meta_channel_id,
+      event: comment,
+    });
+    return 'inserted';
   }
 
   const message = parseZernioMessage(payload);

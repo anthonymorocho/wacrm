@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
 import type { Deal } from '@/types';
-import { moveDealToPipeline, toggleTagId } from './contact-sidebar-state';
+import {
+  moveDealToPipeline,
+  shouldShowAdditionalPipelineAssignment,
+  toggleTagId,
+} from './contact-sidebar-state';
 
 const deal = (overrides: Partial<Deal> = {}): Deal => ({
   id: 'deal-1',
@@ -31,5 +35,15 @@ describe('contact sidebar state', () => {
       deal({ pipeline_id: 'pipeline-new', stage_id: 'stage-new' }),
       deals[1],
     ]);
+  });
+
+  it('hides the additional funnel form until it is explicitly opened', () => {
+    expect(shouldShowAdditionalPipelineAssignment(1, true, 2, false)).toBe(
+      false
+    );
+    expect(shouldShowAdditionalPipelineAssignment(1, true, 2, true)).toBe(true);
+    expect(shouldShowAdditionalPipelineAssignment(1, false, 2, true)).toBe(
+      false
+    );
   });
 });

@@ -24,7 +24,12 @@ import { ContactSidebar } from '@/components/inbox/contact-sidebar';
 import { WifiOff } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/hooks/use-auth';
-import { replaceInboxConversationUrl } from '@/lib/inbox/navigation';
+import {
+  clearRememberedInboxConversation,
+  readRememberedInboxConversation,
+  rememberInboxConversation,
+  replaceInboxConversationUrl,
+} from '@/lib/inbox/navigation';
 
 // Remembers the agent's show/hide choice for the desktop contact panel
 // across reloads and sessions (device-scoped, like the theme prefs).
@@ -100,11 +105,34 @@ function InboxPageInner() {
     });
   }, []);
 
-  // Fire the deep-link auto-select exactly once per URL — subsequent
+  // Fire the URL/session restore exactly once per candidate — subsequent
   // list refreshes (realtime, manual refetch) must not snap the user
-  // back to the deep-linked conversation if they've already clicked
-  // elsewhere.
-  const autoSelectedForDeepLinkRef = useRef<string | null>(null);
+  // back to a conversation after they've clicked elsewhere.
+  const autoSelectedConversationRef = useRef<string | null>(null);
+  const rememberedConversationIdRef = useRef<string | null>(null);
+  const sessionSelectionReadyRef = useRef(false);
+  const pendingConversationsRef = useRef<Conversation[] | null>(null);
+
+  const rememberSelectedConversation = useCallback((conversationId: string) => {
+    if (typeof window === 'undefined') return;
+    try {
+      rememberInboxConversation(conversationId, window.sessionStorage);
+      rememberedConversationIdRef.current = conversationId;
+    } catch {
+      // Access to sessionStorage itself can be denied in private or
+      // embedded browser contexts; the Inbox state remains authoritative.
+    }
+  }, []);
+
+  const clearRememberedConversation = useCallback(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      clearRememberedInboxConversation(window.sessionStorage);
+      rememberedConversationIdRef.current = null;
+    } catch {
+      // Storage is best-effort; there is nothing else to clean up here.
+    }
+  }, []);
 
   // Tracks conversations whose hydrate fetch is currently in flight. The
   // conv-INSERT and the first-message-INSERT events both call into
@@ -138,58 +166,61 @@ function InboxPageInner() {
   // conversations stuck on "No messages yet" until the user reloaded.
   // Also self-heals if a realtime event was missed: callers can invoke
   // this whenever they reference a conversation id they don't recognise.
-  const hydrateConversation = useCallback(async (convId: string) => {
-    if (hydratingConvIdsRef.current.has(convId)) return;
-    hydratingConvIdsRef.current.add(convId);
-    try {
-      const supabase = createClient();
-      const { data, error } = await supabase
-        .from('conversations')
-        .select(CONVERSATION_SELECT)
-        .eq('id', convId)
-        .maybeSingle();
-      if (error) {
-        // Supabase errors have non-enumerable properties — log fields
-        // explicitly so the console message isn't just `{}`.
-        console.error('Failed to hydrate conversation:', {
-          message: error.message,
-          details: error.details,
-          hint: error.hint,
-          code: error.code,
-        });
-        return;
-      }
-      if (!data) return;
-      const fetched = normalizeConversation(data);
-      // RLS is the trust boundary; this client-side check keeps a stale
-      // realtime/hydration callback from reintroducing a row after a role or
-      // assignment change.
-      if (
-        !accountRole ||
-        !isConversationVisibleToUser(fetched, accountRole, user?.id ?? null)
-      ) {
-        return;
-      }
-      setConversations((prev) => {
-        const existing = prev.find((c) => c.id === fetched.id);
-        if (existing) {
-          // Already in state — keep its fields (a realtime UPDATE may
-          // have landed while the fetch was in flight and patched
-          // last_message_text / unread_count to fresher values than
-          // the row we just read). Only backfill `contact`, which the
-          // realtime payloads never carry.
-          return prev.map((c) =>
-            c.id === fetched.id
-              ? { ...c, contact: c.contact ?? fetched.contact }
-              : c
-          );
+  const hydrateConversation = useCallback(
+    async (convId: string) => {
+      if (hydratingConvIdsRef.current.has(convId)) return;
+      hydratingConvIdsRef.current.add(convId);
+      try {
+        const supabase = createClient();
+        const { data, error } = await supabase
+          .from('conversations')
+          .select(CONVERSATION_SELECT)
+          .eq('id', convId)
+          .maybeSingle();
+        if (error) {
+          // Supabase errors have non-enumerable properties — log fields
+          // explicitly so the console message isn't just `{}`.
+          console.error('Failed to hydrate conversation:', {
+            message: error.message,
+            details: error.details,
+            hint: error.hint,
+            code: error.code,
+          });
+          return;
         }
-        return [fetched, ...prev];
-      });
-    } finally {
-      hydratingConvIdsRef.current.delete(convId);
-    }
-  }, [accountRole, user?.id]);
+        if (!data) return;
+        const fetched = normalizeConversation(data);
+        // RLS is the trust boundary; this client-side check keeps a stale
+        // realtime/hydration callback from reintroducing a row after a role or
+        // assignment change.
+        if (
+          !accountRole ||
+          !isConversationVisibleToUser(fetched, accountRole, user?.id ?? null)
+        ) {
+          return;
+        }
+        setConversations((prev) => {
+          const existing = prev.find((c) => c.id === fetched.id);
+          if (existing) {
+            // Already in state — keep its fields (a realtime UPDATE may
+            // have landed while the fetch was in flight and patched
+            // last_message_text / unread_count to fresher values than
+            // the row we just read). Only backfill `contact`, which the
+            // realtime payloads never carry.
+            return prev.map((c) =>
+              c.id === fetched.id
+                ? { ...c, contact: c.contact ?? fetched.contact }
+                : c
+            );
+          }
+          return [fetched, ...prev];
+        });
+      } finally {
+        hydratingConvIdsRef.current.delete(convId);
+      }
+    },
+    [accountRole, user?.id]
+  );
 
   // Check WhatsApp connection status on mount
   useEffect(() => {
@@ -310,7 +341,9 @@ function InboxPageInner() {
       if (event.eventType === 'DELETE') {
         const deletedId = event.old.id ?? conv?.id;
         if (!deletedId) return;
-        setConversations((prev) => prev.filter((item) => item.id !== deletedId));
+        setConversations((prev) =>
+          prev.filter((item) => item.id !== deletedId)
+        );
         if (activeConversation?.id === deletedId) {
           setActiveConversation(null);
           setActiveContact(null);
@@ -482,53 +515,97 @@ function InboxPageInner() {
     setResyncToken((n) => n + 1);
   }, []);
 
-  const handleConversationsLoaded = useCallback(
+  const restoreConversationFromCandidate = useCallback(
     (loaded: Conversation[]) => {
-      setConversations(loaded);
       const visibleLoaded = accountRole
         ? filterVisibleConversations(loaded, accountRole, user?.id ?? null)
         : [];
-      // Resolve a pending deep-link here rather than in an effect — this
-      // is an event handler, so the setState calls below are allowed by
-      // react-hooks/set-state-in-effect. Runs once per ?c=<id> URL value
-      // via the ref, so realtime refreshes of the list can't snap the
-      // user back to the deep-linked thread after they've navigated.
+      const candidateId =
+        deepLinkConvId ??
+        (sessionSelectionReadyRef.current
+          ? rememberedConversationIdRef.current
+          : null);
+
       if (
-        deepLinkConvId &&
-        autoSelectedForDeepLinkRef.current !== deepLinkConvId &&
-        visibleLoaded.length > 0
+        !candidateId ||
+        autoSelectedConversationRef.current === candidateId ||
+        visibleLoaded.length === 0
       ) {
-        autoSelectedForDeepLinkRef.current = deepLinkConvId;
-        // If the deep-linked conversation is already the active one
-        // (e.g. because the user clicked it in the list and the URL was
-        // updated, which made the ConversationList refetch and land us back
-        // here), do NOT re-apply it. Doing so
-        // would setMessages([]) on a thread whose messages have
-        // already been loaded by MessageThread — and because
-        // conversationId didn't change, MessageThread wouldn't
-        // refetch. The thread would read "No messages yet" until a
-        // full page reload rehydrated state from scratch.
-        if (activeConversation?.id === deepLinkConvId) return;
-        const match = visibleLoaded.find((c) => c.id === deepLinkConvId);
-        if (match) {
-          setActiveConversation(match);
-          setActiveContact(match.contact ?? null);
-          setMessages([]);
-          // Mirror the optimistic unread reset that handleSelectConversation
-          // does — the user just deep-linked into this conv, treat that the
-          // same as a click. Leaves activeConversation.unread_count alone so
-          // the MessageThread reset effect still fires the server UPDATE.
-          if (match.unread_count > 0) {
-            setConversations((prev) =>
-              prev.map((c) =>
-                c.id === match.id ? { ...c, unread_count: 0 } : c
-              )
-            );
-          }
+        return;
+      }
+
+      autoSelectedConversationRef.current = candidateId;
+      const match = visibleLoaded.find(
+        (conversation) => conversation.id === candidateId
+      );
+      if (!match) {
+        // A stale session value must not affect the next Inbox visit. URL
+        // deep links are left alone so an externally shared link can still
+        // be diagnosed by the caller instead of being silently rewritten.
+        if (
+          !deepLinkConvId &&
+          rememberedConversationIdRef.current === candidateId
+        ) {
+          clearRememberedConversation();
         }
+        return;
+      }
+
+      // Do not clear a thread that has already been hydrated while the list
+      // was refreshing. This is the same guard used for URL deep links.
+      if (activeConversation?.id === candidateId) return;
+
+      setActiveConversation(match);
+      setActiveContact(match.contact ?? null);
+      setMessages([]);
+      rememberSelectedConversation(match.id);
+      replaceInboxConversationUrl(match.id, window.history);
+
+      if (match.unread_count > 0) {
+        setConversations((previous) =>
+          previous.map((conversation) =>
+            conversation.id === match.id
+              ? { ...conversation, unread_count: 0 }
+              : conversation
+          )
+        );
       }
     },
-    [accountRole, deepLinkConvId, activeConversation?.id, user?.id]
+    [
+      accountRole,
+      activeConversation?.id,
+      clearRememberedConversation,
+      deepLinkConvId,
+      rememberSelectedConversation,
+      user?.id,
+    ]
+  );
+
+  // The list and session storage load independently. Keep the list as a
+  // pending candidate so either one may finish first without losing the
+  // user's selection.
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        rememberedConversationIdRef.current = readRememberedInboxConversation(
+          window.sessionStorage
+        );
+      } catch {
+        rememberedConversationIdRef.current = null;
+      }
+    }
+    sessionSelectionReadyRef.current = true;
+    const pending = pendingConversationsRef.current;
+    if (pending) restoreConversationFromCandidate(pending);
+  }, [restoreConversationFromCandidate]);
+
+  const handleConversationsLoaded = useCallback(
+    (loaded: Conversation[]) => {
+      setConversations(loaded);
+      pendingConversationsRef.current = loaded;
+      restoreConversationFromCandidate(loaded);
+    },
+    [restoreConversationFromCandidate]
   );
 
   const handleSelectConversation = useCallback(
@@ -568,13 +645,19 @@ function InboxPageInner() {
       // points at the previous value, the auto-select block sees
       // `ref !== deepLinkConvId`, fires a second time, and clobbers the
       // messages MessageThread just fetched.
-      autoSelectedForDeepLinkRef.current = conv.id;
+      autoSelectedConversationRef.current = conv.id;
+      rememberSelectedConversation(conv.id);
       // Reflect the selection in the URL so a refresh lands the user
       // back in the same thread, and so copy-paste links work. Use
       // replaceState() to avoid both route navigation and history entries.
       replaceInboxConversationUrl(conv.id, window.history);
     },
-    [accountRole, activeConversation?.id, user?.id]
+    [
+      accountRole,
+      activeConversation?.id,
+      rememberSelectedConversation,
+      user?.id,
+    ]
   );
 
   // Mobile "back" — deselect the conversation so the list pane comes
@@ -586,9 +669,10 @@ function InboxPageInner() {
     setMessages([]);
     // Clearing the ref lets the deep-link auto-selector fire again if
     // the user later visits /inbox?c=<same-id> — desirable UX.
-    autoSelectedForDeepLinkRef.current = null;
+    autoSelectedConversationRef.current = null;
+    clearRememberedConversation();
     router.replace('/inbox', { scroll: false });
-  }, [router]);
+  }, [clearRememberedConversation, router]);
 
   const handleMessagesLoaded = useCallback((loaded: Message[]) => {
     setMessages(loaded);
@@ -641,11 +725,11 @@ function InboxPageInner() {
           isConversationVisibleToUser(
             { ...activeConversation, assigned_agent_id: nextAssignment },
             accountRole,
-            user?.id ?? null,
+            user?.id ?? null
           );
         if (stillVisible) {
           setActiveConversation((prev) =>
-            prev ? { ...prev, assigned_agent_id: nextAssignment } : prev,
+            prev ? { ...prev, assigned_agent_id: nextAssignment } : prev
           );
         } else {
           setActiveConversation(null);
@@ -678,9 +762,11 @@ function InboxPageInner() {
           isConversationVisibleToUser(
             { ...prev, assigned_agent_id: assignedAgentId },
             accountRole,
-            user?.id ?? null,
+            user?.id ?? null
           );
-        return stillVisible ? { ...prev, assigned_agent_id: assignedAgentId } : null;
+        return stillVisible
+          ? { ...prev, assigned_agent_id: assignedAgentId }
+          : null;
       });
       if (
         activeConversation &&
@@ -689,7 +775,7 @@ function InboxPageInner() {
           !isConversationVisibleToUser(
             { ...activeConversation, assigned_agent_id: assignedAgentId },
             accountRole,
-            user?.id ?? null,
+            user?.id ?? null
           ))
       ) {
         setActiveContact(null);
@@ -812,6 +898,7 @@ function InboxPageInner() {
         {contactPanelOpen && (
           <div className="hidden lg:block">
             <ContactSidebar
+              key={activeContact?.id ?? 'no-contact'}
               contact={activeContact}
               onContactUpdated={handleContactUpdated}
             />

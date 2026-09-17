@@ -23,6 +23,7 @@ interface SocialConversation {
   id: string;
   status: 'open' | 'pending' | 'closed';
   unread_count: number | null;
+  zernio_conversation_id?: string | null;
 }
 
 interface SocialIdentity {
@@ -149,7 +150,7 @@ async function findOrCreateConversation(
 ): Promise<SocialConversation> {
   const { data: existingRows, error: lookupError } = await db
     .from('conversations')
-    .select('id, status, unread_count')
+    .select('id, status, unread_count, zernio_conversation_id')
     .eq('account_id', channel.account_id)
     .eq('contact_id', contactId)
     .order('created_at', { ascending: true })
@@ -168,15 +169,16 @@ async function findOrCreateConversation(
       contact_id: contactId,
       channel: message.provider,
       channel_id: channel.id,
+      zernio_conversation_id: message.externalConversationId ?? null,
     })
-    .select('id, status, unread_count')
+    .select('id, status, unread_count, zernio_conversation_id')
     .single();
   if (!createError && created) return created as SocialConversation;
 
   if (isUniqueViolation(createError)) {
     const { data: racedRows, error: racedError } = await db
       .from('conversations')
-      .select('id, status, unread_count')
+      .select('id, status, unread_count, zernio_conversation_id')
       .eq('account_id', channel.account_id)
       .eq('contact_id', contactId)
       .order('created_at', { ascending: true })
@@ -232,6 +234,9 @@ async function updateConversation(
             status: inboundUpdate.status,
             assigned_agent_id: inboundUpdate.assignedAgentId,
           }
+        : {}),
+      ...(message.externalConversationId && !conversation.zernio_conversation_id
+        ? { zernio_conversation_id: message.externalConversationId }
         : {}),
     })
     .eq('id', conversation.id)

@@ -16,6 +16,8 @@ export interface NormalizedMetaMessage {
   externalAccountId: string;
   senderId: string;
   senderName: string | null;
+  /** Provider conversation id, when the upstream payload exposes one. */
+  externalConversationId?: string | null;
   messageId: string;
   timestamp: string;
   contentType: ContentType;

@@ -19,6 +19,7 @@ import { LanguageToggle } from "@/components/layout/language-toggle";
 const pageTitles: Record<string, string> = {
   "/dashboard": "dashboard",
   "/inbox": "inbox",
+  "/comments": "comments",
   "/notifications": "notifications",
   "/contacts": "contacts",
   "/pipelines": "pipelines",

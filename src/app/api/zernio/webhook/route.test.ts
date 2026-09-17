@@ -47,6 +47,10 @@ const payload = {
 
 function signedRequest(body: unknown, secret = 'zernio-secret') {
   const raw = JSON.stringify(body);
+  const eventId =
+    typeof body === 'object' && body !== null && 'id' in body
+      ? String((body as { id: unknown }).id)
+      : payload.id;
   const signature = crypto
     .createHmac('sha256', secret)
     .update(raw)
@@ -56,7 +60,7 @@ function signedRequest(body: unknown, secret = 'zernio-secret') {
     headers: {
       'Content-Type': 'application/json',
       'X-Zernio-Signature': signature,
-      'X-Zernio-Event-Id': payload.id,
+      'X-Zernio-Event-Id': eventId,
     },
     body: raw,
   });
@@ -127,5 +131,43 @@ describe('/api/zernio/webhook', () => {
 
     expect(response.status).toBe(401);
     expect(builder.insert).not.toHaveBeenCalled();
+  });
+
+  it('persists and schedules a signed Facebook comment event', async () => {
+    const commentPayload = {
+      ...payload,
+      id: 'comment-event-1',
+      event: 'comment.received',
+      comment: {
+        id: 'comment-1',
+        postId: null,
+        platformPostId: 'facebook-post-1',
+        platform: 'facebook',
+        text: 'Hola',
+        author: { id: 'customer-1', name: 'Ana' },
+        createdAt: '2026-09-17T12:00:00.000Z',
+        isReply: false,
+        parentCommentId: null,
+      },
+      post: {
+        id: null,
+        platformPostId: 'facebook-post-1',
+        content: 'Publicación',
+        imageUrl: null,
+        permalink: null,
+      },
+    };
+
+    const response = await POST(signedRequest(commentPayload));
+
+    expect(response.status).toBe(200);
+    expect(builder.insert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: 'comment-event-1',
+        event: 'comment.received',
+      })
+    );
+    await callbacks.shift()?.();
+    expect(inbound.processZernioEvent).toHaveBeenCalledWith(commentPayload);
   });
 });

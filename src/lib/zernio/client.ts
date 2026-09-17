@@ -191,7 +191,11 @@ export async function ensureZernioWebhook(args: {
   url: string;
   secret: string;
 }): Promise<string> {
-  const events = ['message.received', 'account.disconnected'];
+  const events = [
+    'message.received',
+    'comment.received',
+    'account.disconnected',
+  ];
   const listed = await zernioRequest<{ webhooks?: unknown }>(
     args.apiKey,
     '/v1/webhooks/settings'
@@ -236,4 +240,288 @@ export async function ensureZernioWebhook(args: {
     throw new Error('Zernio did not return the created webhook');
   }
   return created.webhook._id;
+}
+
+export interface ZernioCommentedPost {
+  id: string;
+  platform: string;
+  accountId: string;
+  /** Present in some API versions; falls back to the provider post id. */
+  platformPostId: string;
+  accountUsername: string | null;
+  content: string | null;
+  picture: string | null;
+  permalink: string | null;
+  createdTime: string | null;
+  commentCount: number;
+  likeCount: number;
+}
+
+function numberValue(value: unknown): number {
+  return typeof value === 'number' && Number.isFinite(value) ? value : 0;
+}
+
+function normalizeCommentedPost(value: unknown): ZernioCommentedPost | null {
+  if (!isRecord(value) || typeof value.id !== 'string' || !value.id.trim()) {
+    return null;
+  }
+  return {
+    id: value.id,
+    platform: typeof value.platform === 'string' ? value.platform : '',
+    accountId: typeof value.accountId === 'string' ? value.accountId : '',
+    platformPostId:
+      typeof value.platformPostId === 'string'
+        ? value.platformPostId
+        : value.id,
+    accountUsername:
+      typeof value.accountUsername === 'string' ? value.accountUsername : null,
+    content: typeof value.content === 'string' ? value.content : null,
+    picture: typeof value.picture === 'string' ? value.picture : null,
+    permalink: typeof value.permalink === 'string' ? value.permalink : null,
+    createdTime:
+      typeof value.createdTime === 'string' ? value.createdTime : null,
+    commentCount: numberValue(value.commentCount),
+    likeCount: numberValue(value.likeCount),
+  };
+}
+
+/** List posts with comments for one connected Zernio account. */
+export async function listZernioCommentedPosts(args: {
+  apiKey: string;
+  accountId: string;
+  platform?: 'facebook';
+  limit?: number;
+  cursor?: string | null;
+}): Promise<ZernioCommentedPost[]> {
+  const query = new URLSearchParams({
+    accountId: args.accountId,
+    limit: String(args.limit ?? 25),
+  });
+  if (args.platform) query.set('platform', args.platform);
+  if (args.cursor) query.set('cursor', args.cursor);
+
+  const result = await zernioRequest<{ data?: unknown }>(
+    args.apiKey,
+    `/v1/inbox/comments?${query.toString()}`
+  );
+  if (!Array.isArray(result.data)) return [];
+  return result.data.flatMap((value): ZernioCommentedPost[] => {
+    const post = normalizeCommentedPost(value);
+    return post ? [post] : [];
+  });
+}
+
+export interface ZernioInboxComment {
+  id: string;
+  message: string;
+  createdTime: string;
+  from: {
+    id: string | null;
+    name: string | null;
+    username: string | null;
+    picture: string | null;
+    isOwner: boolean | null;
+  };
+  likeCount: number;
+  replyCount: number;
+  platform: string;
+  url: string | null;
+  replies: ZernioInboxComment[];
+  canReply: boolean;
+  parentId?: string | null;
+  isHidden?: boolean;
+}
+
+function normalizeInboxComment(value: unknown): ZernioInboxComment | null {
+  if (!isRecord(value) || typeof value.id !== 'string' || !value.id.trim()) {
+    return null;
+  }
+  const from = isRecord(value.from) ? value.from : null;
+  const replies = Array.isArray(value.replies)
+    ? value.replies.flatMap((reply): ZernioInboxComment[] => {
+        const normalized = normalizeInboxComment(reply);
+        return normalized ? [normalized] : [];
+      })
+    : [];
+  return {
+    id: value.id,
+    message: typeof value.message === 'string' ? value.message : '',
+    createdTime:
+      typeof value.createdTime === 'string'
+        ? value.createdTime
+        : new Date().toISOString(),
+    from: {
+      id: typeof from?.id === 'string' ? from.id : null,
+      name: typeof from?.name === 'string' ? from.name : null,
+      username: typeof from?.username === 'string' ? from.username : null,
+      picture: typeof from?.picture === 'string' ? from.picture : null,
+      isOwner: typeof from?.isOwner === 'boolean' ? from.isOwner : null,
+    },
+    likeCount: numberValue(value.likeCount),
+    replyCount: numberValue(value.replyCount),
+    platform: typeof value.platform === 'string' ? value.platform : '',
+    url: typeof value.url === 'string' ? value.url : null,
+    replies,
+    canReply: value.canReply !== false,
+    parentId: typeof value.parentId === 'string' ? value.parentId : null,
+    isHidden: typeof value.isHidden === 'boolean' ? value.isHidden : undefined,
+  };
+}
+
+export interface ZernioInboxPostComments {
+  comments: ZernioInboxComment[];
+  hasMore: boolean;
+  cursor: string | null;
+}
+
+/** Read one post's current Facebook comment thread. */
+export async function getZernioInboxPostComments(args: {
+  apiKey: string;
+  accountId: string;
+  postId: string;
+  limit?: number;
+  cursor?: string | null;
+}): Promise<ZernioInboxPostComments> {
+  const query = new URLSearchParams({
+    accountId: args.accountId,
+    limit: String(args.limit ?? 100),
+  });
+  if (args.cursor) query.set('cursor', args.cursor);
+  const result = await zernioRequest<{
+    comments?: unknown;
+    pagination?: unknown;
+  }>(
+    args.apiKey,
+    `/v1/inbox/comments/${encodeURIComponent(args.postId)}?${query.toString()}`
+  );
+  const comments = Array.isArray(result.comments)
+    ? result.comments.flatMap((value): ZernioInboxComment[] => {
+        const normalized = normalizeInboxComment(value);
+        return normalized ? [normalized] : [];
+      })
+    : [];
+  const pagination = isRecord(result.pagination) ? result.pagination : null;
+  return {
+    comments,
+    hasMore: pagination?.hasMore === true,
+    cursor: typeof pagination?.cursor === 'string' ? pagination.cursor : null,
+  };
+}
+
+export interface ZernioCommentReplyResult {
+  commentId: string;
+  isReply: boolean;
+}
+
+/** Reply publicly to a Facebook post or one of its comments. */
+export async function replyToZernioInboxPost(args: {
+  apiKey: string;
+  accountId: string;
+  postId: string;
+  commentId?: string | null;
+  message: string;
+  idempotencyKey: string;
+}): Promise<ZernioCommentReplyResult> {
+  const body: Record<string, string> = {
+    accountId: args.accountId,
+    message: args.message,
+  };
+  if (args.commentId) body.commentId = args.commentId;
+  const result = await zernioRequest<{ data?: unknown }>(
+    args.apiKey,
+    `/v1/inbox/comments/${encodeURIComponent(args.postId)}`,
+    {
+      method: 'POST',
+      headers: { 'Idempotency-Key': args.idempotencyKey },
+      body: JSON.stringify(body),
+    }
+  );
+  const data = isRecord(result.data) ? result.data : null;
+  if (
+    !data ||
+    typeof data.commentId !== 'string' ||
+    typeof data.isReply !== 'boolean'
+  ) {
+    throw new Error('Zernio did not return the posted comment');
+  }
+  return { commentId: data.commentId, isReply: data.isReply };
+}
+
+export interface ZernioInboxMessageResult {
+  messageId: string;
+  conversationId: string;
+}
+
+/** Send a text message through an existing Zernio inbox conversation. */
+export async function sendZernioInboxMessage(args: {
+  apiKey: string;
+  accountId: string;
+  conversationId: string;
+  message: string;
+  idempotencyKey: string;
+}): Promise<ZernioInboxMessageResult> {
+  const result = await zernioRequest<{ data?: unknown }>(
+    args.apiKey,
+    `/v1/inbox/conversations/${encodeURIComponent(args.conversationId)}/messages`,
+    {
+      method: 'POST',
+      headers: { 'Idempotency-Key': args.idempotencyKey },
+      body: JSON.stringify({
+        accountId: args.accountId,
+        message: args.message,
+      }),
+    }
+  );
+  const data = isRecord(result.data) ? result.data : null;
+  if (
+    !data ||
+    typeof data.messageId !== 'string' ||
+    typeof data.conversationId !== 'string'
+  ) {
+    throw new Error('Zernio did not return the sent inbox message');
+  }
+  return {
+    messageId: data.messageId,
+    conversationId: data.conversationId,
+  };
+}
+
+export interface ZernioInboxConversation {
+  id: string;
+  accountId: string;
+  platform: string;
+  participantId: string | null;
+}
+
+/** List a bounded page of conversations for recovering older CRM threads. */
+export async function listZernioInboxConversations(args: {
+  apiKey: string;
+  accountId: string;
+  platform?: string;
+  limit?: number;
+}): Promise<ZernioInboxConversation[]> {
+  const query = new URLSearchParams({
+    accountId: args.accountId,
+    limit: String(args.limit ?? 100),
+  });
+  if (args.platform) query.set('platform', args.platform);
+
+  const result = await zernioRequest<{ data?: unknown }>(
+    args.apiKey,
+    `/v1/inbox/conversations?${query.toString()}`
+  );
+  if (!Array.isArray(result.data)) return [];
+
+  return result.data.flatMap((value): ZernioInboxConversation[] => {
+    if (!isRecord(value) || typeof value.id !== 'string') return [];
+    return [
+      {
+        id: value.id,
+        accountId: typeof value.accountId === 'string' ? value.accountId : '',
+        platform: typeof value.platform === 'string' ? value.platform : '',
+        participantId:
+          typeof value.participantId === 'string' ? value.participantId : null,
+      },
+    ];
+  });
 }

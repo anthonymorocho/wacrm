@@ -42,6 +42,11 @@
     "menuSignOut": "Cerrar sesión"
   },
   "Header": {
+    "queueBreakdown": "Mensajes en cola por canal",
+    "queueLoading": "Cargando mensajes en cola",
+    "whatsappChannel": "WS",
+    "facebookChannel": "FB",
+    "instagramChannel": "IG",
     "dashboard": "Panel",
     "inbox": "Bandeja de entrada",
     "comments": "Comentarios",

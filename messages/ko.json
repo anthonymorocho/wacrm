@@ -42,6 +42,11 @@
     "menuSignOut": "로그아웃"
   },
   "Header": {
+    "queueBreakdown": "채널별 대기 중 메시지",
+    "queueLoading": "대기 중 메시지 로딩 중",
+    "whatsappChannel": "WS",
+    "facebookChannel": "FB",
+    "instagramChannel": "IG",
     "dashboard": "대시보드",
     "inbox": "인박스",
     "comments": "Comments",

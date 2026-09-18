@@ -2,7 +2,9 @@ import { describe, expect, it, vi } from 'vitest';
 
 import {
   buildAgentWorkload,
+  buildQueueCountBreakdown,
   loadConversationsSeries,
+  loadQueueCounts,
   loadQueueCount,
 } from './queries';
 
@@ -69,6 +71,65 @@ describe('loadQueueCount', () => {
     expect(builder.eq).toHaveBeenCalledWith('account_id', 'account-1');
     expect(builder.is).toHaveBeenCalledWith('assigned_agent_id', null);
     expect(builder.in).toHaveBeenCalledWith('status', ['open', 'pending']);
+  });
+});
+
+describe('queue channel counts', () => {
+  it('keeps every supported channel and derives the total', () => {
+    expect(
+      buildQueueCountBreakdown({
+        whatsapp: 10,
+        messenger: 5,
+        instagram: 0,
+      }),
+    ).toEqual({
+      whatsapp: 10,
+      messenger: 5,
+      instagram: 0,
+      total: 15,
+    });
+  });
+
+  it('loads the account queue split by channel using the active queue rules', async () => {
+    const expected = [
+      { channel: 'whatsapp', count: 10 },
+      { channel: 'messenger', count: 5 },
+      { channel: 'instagram', count: 2 },
+    ] as const;
+    const builders = expected.map(({ channel, count }) => {
+      const builder = {
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        is: vi.fn().mockReturnThis(),
+        in: vi.fn().mockResolvedValue({ count, error: null }),
+      };
+      builder.eq.mockImplementation((field: string, value: string) => {
+        if (field === 'channel') expect(value).toBe(channel);
+        return builder;
+      });
+      return builder;
+    });
+    let builderIndex = 0;
+    const db = {
+      from: vi.fn(() => builders[builderIndex++]),
+    };
+
+    await expect(loadQueueCounts(db as never, 'account-1')).resolves.toEqual({
+      whatsapp: 10,
+      messenger: 5,
+      instagram: 2,
+      total: 17,
+    });
+
+    for (const builder of builders) {
+      expect(builder.select).toHaveBeenCalledWith('id', {
+        count: 'exact',
+        head: true,
+      });
+      expect(builder.eq).toHaveBeenCalledWith('account_id', 'account-1');
+      expect(builder.is).toHaveBeenCalledWith('assigned_agent_id', null);
+      expect(builder.in).toHaveBeenCalledWith('status', ['open', 'pending']);
+    }
   });
 });
 

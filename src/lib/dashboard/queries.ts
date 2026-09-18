@@ -29,6 +29,36 @@ import type {
 
 type DB = SupabaseClient
 
+export type QueueChannel = 'whatsapp' | 'messenger' | 'instagram'
+
+export interface QueueCountBreakdown {
+  whatsapp: number
+  messenger: number
+  instagram: number
+  total: number
+}
+
+const QUEUE_CHANNELS: readonly QueueChannel[] = [
+  'whatsapp',
+  'messenger',
+  'instagram',
+]
+
+export function buildQueueCountBreakdown(
+  counts: Partial<Record<QueueChannel, number | null>>,
+): QueueCountBreakdown {
+  const whatsapp = counts.whatsapp ?? 0
+  const messenger = counts.messenger ?? 0
+  const instagram = counts.instagram ?? 0
+
+  return {
+    whatsapp,
+    messenger,
+    instagram,
+    total: whatsapp + messenger + instagram,
+  }
+}
+
 interface WorkloadMember {
   user_id: string;
   full_name: string | null;
@@ -158,6 +188,29 @@ export async function loadQueueCount(
 
   if (error) throw error;
   return count ?? 0;
+}
+
+/** Load the queued conversation count split by Inbox channel. */
+export async function loadQueueCounts(
+  db: DB,
+  accountId: string,
+): Promise<QueueCountBreakdown> {
+  const entries = await Promise.all(
+    QUEUE_CHANNELS.map(async (channel) => {
+      const { count, error } = await db
+        .from('conversations')
+        .select('id', { count: 'exact', head: true })
+        .eq('account_id', accountId)
+        .is('assigned_agent_id', null)
+        .eq('channel', channel)
+        .in('status', ['open', 'pending'])
+
+      if (error) throw error
+      return [channel, count ?? 0] as const
+    }),
+  )
+
+  return buildQueueCountBreakdown(Object.fromEntries(entries))
 }
 
 // --- 1. Metric cards ---------------------------------------------------

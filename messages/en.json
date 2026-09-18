@@ -42,6 +42,11 @@
     "menuSignOut": "Sign out"
   },
   "Header": {
+    "queueBreakdown": "Queued messages by channel",
+    "queueLoading": "Loading queued messages",
+    "whatsappChannel": "WS",
+    "facebookChannel": "FB",
+    "instagramChannel": "IG",
     "dashboard": "Dashboard",
     "inbox": "Inbox",
     "comments": "Comments",

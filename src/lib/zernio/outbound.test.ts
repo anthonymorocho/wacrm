@@ -10,6 +10,7 @@ const credentials = vi.hoisted(() => ({
 }));
 const connections = vi.hoisted(() => ({
   getZernioConnection: vi.fn(),
+  getZernioConnectionForChannel: vi.fn(),
 }));
 
 vi.mock('@/lib/zernio/client', () => zernio);
@@ -109,6 +110,7 @@ function makeDatabase(
             data: {
               integration_source: options.channelSource ?? 'zernio',
               provider: 'messenger',
+              status: 'connected',
               external_account_id:
                 options.channelExternalAccountId ?? 'facebook-page-1',
             },
@@ -148,6 +150,13 @@ describe('sendMessageToConversation — Zernio Messenger', () => {
     });
     connections.getZernioConnection.mockResolvedValue({
       account_id: 'account-1',
+      provider: 'messenger',
+      zernio_account_id: 'zernio-account-1',
+      status: 'connected',
+    });
+    connections.getZernioConnectionForChannel.mockResolvedValue({
+      account_id: 'account-1',
+      provider: 'messenger',
       zernio_account_id: 'zernio-account-1',
       status: 'connected',
     });

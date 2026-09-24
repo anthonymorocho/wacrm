@@ -16,6 +16,11 @@ import { useSearchParams } from 'next/navigation';
 
 import { useAuth } from '@/hooks/use-auth';
 import type { MetaChannelProvider } from '@/lib/meta/messaging';
+import {
+  indexZernioConnections,
+  type ZernioPublicConnection,
+  type ZernioUiProvider,
+} from '@/lib/zernio/client-contract';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -44,15 +49,7 @@ interface PublicChannel {
   status: 'connected' | 'disconnected';
 }
 
-interface ZernioConnection {
-  id: string;
-  provider: ZernioProvider;
-  display_name: string | null;
-  status: 'connected' | 'disconnected';
-  connected_at: string | null;
-}
-
-type ZernioProvider = 'facebook' | 'instagram';
+type ZernioProvider = ZernioUiProvider;
 const ZERNIO_PROVIDERS: ZernioProvider[] = ['facebook', 'instagram'];
 
 interface ZernioCredentialsForm {
@@ -114,7 +111,7 @@ export function MetaChannelsConfig() {
   const [copied, setCopied] = useState(false);
   const [zernio, setZernio] = useState<{
     configured: boolean;
-    connections: Record<ZernioProvider, ZernioConnection | null>;
+    connections: Record<ZernioProvider, ZernioPublicConnection | null>;
   } | null>(null);
   const [zernioLoading, setZernioLoading] = useState(true);
   const [zernioConnecting, setZernioConnecting] =
@@ -197,18 +194,7 @@ export function MetaChannelsConfig() {
         if (!cancelled) {
           setZernio({
             configured: body.configured === true,
-            connections: {
-              facebook:
-                body.connections?.find(
-                  (connection: ZernioConnection) =>
-                    connection.provider === 'facebook'
-                ) ?? null,
-              instagram:
-                body.connections?.find(
-                  (connection: ZernioConnection) =>
-                    connection.provider === 'instagram'
-                ) ?? null,
-            },
+            connections: indexZernioConnections(body.connections ?? []),
           });
         }
       } catch (error) {

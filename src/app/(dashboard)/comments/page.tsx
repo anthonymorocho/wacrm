@@ -22,6 +22,7 @@ import {
 } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
+import { zernioCommentReplyPayload } from '@/lib/zernio/client-contract';
 
 interface CommentRow {
   id: string;
@@ -176,11 +177,9 @@ export default function CommentsPage() {
       const response = await fetch('/api/zernio/comments', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          social_post_id: postId,
-          comment_id: commentId,
-          message,
-        }),
+        body: JSON.stringify(
+          zernioCommentReplyPayload(postId, commentId, message)
+        ),
       });
       const body = await response.json();
       if (!response.ok) throw new Error(body.error || t('replyFailed'));

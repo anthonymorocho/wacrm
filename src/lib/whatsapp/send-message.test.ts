@@ -1,6 +1,24 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
+const zernio = vi.hoisted(() => ({
+  getZernioConnectionForChannel: vi.fn(), getZernioCredentials: vi.fn(),
+  listZernioInboxConversations: vi.fn(), sendZernioInboxMessage: vi.fn(),
+}));
+vi.mock('@/lib/zernio/connection', () => ({
+  getZernioConnection: vi.fn(),
+  getZernioConnectionForChannel: zernio.getZernioConnectionForChannel,
+}));
+vi.mock('@/lib/zernio/profile', () => ({ getZernioCredentials: zernio.getZernioCredentials }));
+vi.mock('@/lib/zernio/client', () => ({
+  listZernioInboxConversations: zernio.listZernioInboxConversations,
+  sendZernioInboxMessage: zernio.sendZernioInboxMessage,
+}));
+vi.mock('@/lib/flows/admin-client', () => ({ supabaseAdmin: () => ({ from: vi.fn(() => ({
+  update: vi.fn().mockReturnThis(), eq: vi.fn().mockReturnThis(),
+  then: (resolve: (value: unknown) => void) => resolve({ error: null }),
+})) }) }));
+
 import {
   buildAgentMessageInsert,
   sendMessageToConversation,
@@ -217,5 +235,114 @@ describe('buildAgentMessageInsert', () => {
       sender_id: 'agent-1',
       content_type: 'interactive',
     });
+  });
+});
+
+describe('Zernio social replies', () => {
+  function database(channel: 'instagram' | 'messenger', storedId: string | null = 'thread-1') {
+    const conversation = {
+      id: 'conv-1', account_id: 'acct-1', channel, channel_id: 'channel-1',
+      zernio_conversation_id: storedId, contact: { id: 'contact-1' },
+    };
+    const writes: Array<{ table: string; value: unknown }> = [];
+    const db = { from: vi.fn((table: string) => {
+      const builder = {
+        select: vi.fn().mockReturnThis(), eq: vi.fn().mockReturnThis(),
+        insert: vi.fn((value: unknown) => { writes.push({ table, value }); return builder; }),
+        update: vi.fn((value: unknown) => { writes.push({ table, value }); return builder; }),
+        single: vi.fn().mockResolvedValue({ data: table === 'conversations' ? conversation : { id: 'saved-1' }, error: null }),
+        maybeSingle: vi.fn().mockResolvedValue({
+          data: table === 'meta_channels'
+            ? { provider: channel, integration_source: 'zernio', status: 'connected' }
+            : { external_user_id: 'participant-1' }, error: null,
+        }),
+        then: (resolve: (value: unknown) => void) => resolve({ error: null }),
+      };
+      return builder;
+    }) } as unknown as SupabaseClient;
+    return { db, writes };
+  }
+
+  it('sends an Instagram text reply through the conversation channel account', async () => {
+    vi.clearAllMocks();
+    const { db, writes } = database('instagram');
+    zernio.getZernioConnectionForChannel.mockResolvedValue({
+      provider: 'instagram', status: 'connected', zernio_account_id: 'ig-account-1',
+      meta_channel_id: 'channel-1',
+    });
+    zernio.getZernioCredentials.mockResolvedValue({ apiKey: 'key' });
+    zernio.sendZernioInboxMessage.mockResolvedValue({ messageId: 'ig-mid-1' });
+
+    await sendMessageToConversation(db, 'acct-1', {
+      conversationId: 'conv-1', messageType: 'text', contentText: 'Hola',
+    });
+    expect(zernio.getZernioConnectionForChannel).toHaveBeenCalledWith(
+      expect.anything(), 'acct-1', 'channel-1'
+    );
+    expect(zernio.sendZernioInboxMessage).toHaveBeenCalledWith(expect.objectContaining({
+      accountId: 'ig-account-1', conversationId: 'thread-1', message: 'Hola',
+    }));
+    expect(writes).toContainEqual({ table: 'messages', value: expect.objectContaining({
+      channel: 'instagram', channel_id: 'channel-1', message_id: 'ig-mid-1',
+    }) });
+  });
+
+  it('keeps Messenger replies on the Facebook Zernio account', async () => {
+    vi.clearAllMocks();
+    const { db } = database('messenger');
+    zernio.getZernioConnectionForChannel.mockResolvedValue({
+      provider: 'messenger', status: 'connected', zernio_account_id: 'fb-account-1',
+      meta_channel_id: 'channel-1',
+    });
+    zernio.getZernioCredentials.mockResolvedValue({ apiKey: 'key' });
+    zernio.sendZernioInboxMessage.mockResolvedValue({ messageId: 'fb-mid-1' });
+
+    await sendMessageToConversation(db, 'acct-1', {
+      conversationId: 'conv-1', messageType: 'text', contentText: 'Hola',
+    });
+    expect(zernio.sendZernioInboxMessage).toHaveBeenCalledWith(expect.objectContaining({
+      accountId: 'fb-account-1', conversationId: 'thread-1', message: 'Hola',
+    }));
+  });
+
+  it('recovers an Instagram conversation only from the Instagram account and platform', async () => {
+    vi.clearAllMocks();
+    const { db } = database('instagram', null);
+    zernio.getZernioConnectionForChannel.mockResolvedValue({
+      provider: 'instagram', status: 'connected', zernio_account_id: 'ig-account-1',
+      meta_channel_id: 'channel-1',
+    });
+    zernio.getZernioCredentials.mockResolvedValue({ apiKey: 'key' });
+    zernio.listZernioInboxConversations.mockResolvedValue([
+      { id: 'wrong', accountId: 'ig-account-1', platform: 'facebook', participantId: 'participant-1' },
+      { id: 'ig-thread', accountId: 'ig-account-1', platform: 'instagram', participantId: 'participant-1' },
+    ]);
+    zernio.sendZernioInboxMessage.mockResolvedValue({ messageId: 'ig-mid-1' });
+
+    await sendMessageToConversation(db, 'acct-1', {
+      conversationId: 'conv-1', messageType: 'text', contentText: 'Hola',
+    });
+    expect(zernio.listZernioInboxConversations).toHaveBeenCalledWith(expect.objectContaining({
+      accountId: 'ig-account-1', platform: 'instagram',
+    }));
+    expect(zernio.sendZernioInboxMessage).toHaveBeenCalledWith(expect.objectContaining({
+      conversationId: 'ig-thread',
+    }));
+  });
+
+  it('rejects media replies and a connection for a different provider', async () => {
+    vi.clearAllMocks();
+    const { db } = database('instagram');
+    zernio.getZernioConnectionForChannel.mockResolvedValue({
+      provider: 'messenger', status: 'connected', zernio_account_id: 'fb-account-1',
+    });
+    zernio.getZernioCredentials.mockResolvedValue({ apiKey: 'key' });
+    await expect(sendMessageToConversation(db, 'acct-1', {
+      conversationId: 'conv-1', messageType: 'text', contentText: 'Hola',
+    })).rejects.toMatchObject({ code: 'zernio_not_configured' });
+    await expect(sendMessageToConversation(db, 'acct-1', {
+      conversationId: 'conv-1', messageType: 'image', mediaUrl: 'https://example.com/a.jpg',
+    })).rejects.toMatchObject({ code: 'unsupported_message_type' });
+    expect(zernio.sendZernioInboxMessage).not.toHaveBeenCalled();
   });
 });

@@ -1,7 +1,7 @@
 import type { ContentType } from '@/types';
 
 export interface NormalizedZernioMessage {
-  provider: 'messenger';
+  provider: 'messenger' | 'instagram';
   externalAccountId: string;
   senderId: string;
   senderName: string | null;
@@ -49,7 +49,7 @@ function attachmentType(value: unknown): ContentType | null {
 
 /**
  * Normalize one Zernio inbox event into the contract used by the existing
- * Meta inbound pipeline. Facebook attachment URLs are intentionally not
+ * Meta inbound pipeline. Zernio attachment URLs are intentionally not
  * persisted: Zernio documents them as expiring CDN URLs.
  */
 export function parseZernioMessage(
@@ -61,7 +61,10 @@ export function parseZernioMessage(
   const message = isRecord(payload.message) ? payload.message : null;
   if (!account || !message) return null;
 
-  if (message.platform !== 'facebook' || message.direction !== 'incoming') {
+  if (
+    (message.platform !== 'facebook' && message.platform !== 'instagram') ||
+    message.direction !== 'incoming'
+  ) {
     return null;
   }
 
@@ -89,12 +92,13 @@ export function parseZernioMessage(
   const firstAttachment = isRecord(attachments[0]) ? attachments[0] : null;
   const contentType = attachmentType(firstAttachment?.type) ?? 'text';
   const attachmentLabel = nonEmptyString(firstAttachment?.type);
+  const platformLabel = message.platform === 'instagram' ? 'Instagram' : 'Facebook';
   const contentText =
     text ||
-    (attachmentLabel ? `[Facebook ${attachmentLabel}]` : '[Facebook message]');
+    (attachmentLabel ? `[${platformLabel} ${attachmentLabel}]` : `[${platformLabel} message]`);
 
   return {
-    provider: 'messenger',
+    provider: message.platform === 'instagram' ? 'instagram' : 'messenger',
     externalAccountId,
     senderId,
     senderName:

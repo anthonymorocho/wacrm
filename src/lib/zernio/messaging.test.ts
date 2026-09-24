@@ -61,10 +61,30 @@ describe('parseZernioMessage', () => {
     });
   });
 
+  it('normalizes an incoming Instagram attachment for the shared Meta inbox', () => {
+    expect(parseZernioMessage({
+      event: 'message.received',
+      conversation: { id: 'instagram-conversation-1' },
+      message: {
+        platform: 'instagram', direction: 'incoming',
+        platformMessageId: 'ig-mid-1', text: null,
+        attachments: [{ type: 'image', url: 'https://cdn.example/photo.jpg' }],
+        sender: { id: 'ig-user-1', username: 'ana_ig' },
+        sentAt: '2026-09-17T12:00:00Z',
+      },
+      account: { accountId: 'ig-account-1', profileId: 'profile-1' },
+    })).toMatchObject({
+      provider: 'instagram', externalAccountId: 'ig-account-1',
+      externalConversationId: 'instagram-conversation-1',
+      senderId: 'ig-user-1', senderName: 'ana_ig',
+      contentType: 'image', contentText: '[Instagram image]', mediaUrl: null,
+    });
+  });
+
   it.each([
     [
-      'a non-Facebook event',
-      { event: 'message.received', message: { platform: 'instagram' } },
+      'an unsupported platform',
+      { event: 'message.received', message: { platform: 'tiktok' } },
     ],
     [
       'an outgoing message',

@@ -5,11 +5,13 @@ const comments = vi.hoisted(() => ({
   parseZernioCommentEvent: vi.fn(),
   persistZernioCommentEvent: vi.fn(),
 }));
+const metaInbound = vi.hoisted(() => ({ processNormalizedMetaMessage: vi.fn() }));
 
 vi.mock('@/lib/meta/admin-client', () => ({
   supabaseAdmin: () => ({ from: database.from }),
 }));
 vi.mock('./comments', () => comments);
+vi.mock('@/lib/meta/inbound', () => metaInbound);
 
 import { processZernioEvent } from './inbound';
 
@@ -60,5 +62,64 @@ describe('processZernioEvent comment routing', () => {
         metaChannelId: 'channel-1',
       })
     );
+  });
+});
+
+describe('processZernioEvent message routing', () => {
+  const connection = {
+    account_id: 'account-1', meta_channel_id: 'channel-1',
+    provider: 'instagram', status: 'connected',
+  };
+  const channel = {
+    id: 'channel-1', account_id: 'account-1', provider: 'instagram',
+    integration_source: 'zernio', status: 'connected',
+  };
+  const payload = {
+    event: 'message.received',
+    account: { accountId: 'zernio-account-1', profileId: 'profile-1' },
+    message: {
+      platform: 'instagram', direction: 'incoming', platformMessageId: 'mid-1',
+      text: 'Hello', sender: { id: 'customer-1' }, sentAt: '2026-09-17T12:00:00Z',
+    },
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    database.from.mockImplementation((table: string) => {
+      const builder = {
+        select: vi.fn().mockReturnThis(), eq: vi.fn().mockReturnThis(),
+        maybeSingle: vi.fn().mockResolvedValue({
+          data: table === 'zernio_connections' ? connection : channel, error: null,
+        }),
+      };
+      return builder;
+    });
+    metaInbound.processNormalizedMetaMessage.mockResolvedValue('inserted');
+  });
+
+  it('delivers an Instagram message only to its Instagram channel', async () => {
+    expect(await processZernioEvent(payload)).toBe('inserted');
+    expect(metaInbound.processNormalizedMetaMessage).toHaveBeenCalledWith(
+      expect.anything(), channel, expect.objectContaining({ provider: 'instagram' })
+    );
+  });
+
+  it('ignores a message when its platform differs from the connection', async () => {
+    expect(await processZernioEvent({
+      ...payload, message: { ...payload.message, platform: 'facebook' },
+    })).toBe('ignored');
+    expect(metaInbound.processNormalizedMetaMessage).not.toHaveBeenCalled();
+  });
+
+  it('ignores a message when its mapped channel differs from the event', async () => {
+    database.from.mockImplementation((table: string) => ({
+      select: vi.fn().mockReturnThis(), eq: vi.fn().mockReturnThis(),
+      maybeSingle: vi.fn().mockResolvedValue({
+        data: table === 'zernio_connections' ? connection : { ...channel, provider: 'messenger' },
+        error: null,
+      }),
+    }));
+    expect(await processZernioEvent(payload)).toBe('ignored');
+    expect(metaInbound.processNormalizedMetaMessage).not.toHaveBeenCalled();
   });
 });

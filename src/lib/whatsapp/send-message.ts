@@ -49,8 +49,9 @@ import { renderTemplateBody } from './template-message-text';
 import {
   listZernioInboxConversations,
   sendZernioInboxMessage,
+  type ZernioSocialPlatform,
 } from '@/lib/zernio/client';
-import { getZernioConnection } from '@/lib/zernio/connection';
+import { getZernioConnection, getZernioConnectionForChannel } from '@/lib/zernio/connection';
 import { getZernioCredentials } from '@/lib/zernio/profile';
 
 export const MEDIA_KINDS = ['image', 'video', 'document', 'audio'] as const;
@@ -241,7 +242,7 @@ export function validateSendMessageParams(params: {
   }
 }
 
-interface ZernioMessengerConversation {
+interface ZernioSocialConversation {
   id: string;
   channel_id: string;
   zernio_conversation_id?: string | null;
@@ -256,10 +257,12 @@ interface ZernioMessengerConversation {
 async function resolveZernioConversationId(
   db: SupabaseClient,
   accountId: string,
-  conversation: ZernioMessengerConversation,
+  conversation: ZernioSocialConversation,
   zernioAccountId: string,
-  apiKey: string
+  apiKey: string,
+  platform: ZernioSocialPlatform
 ): Promise<string> {
+  const platformLabel = platform === 'instagram' ? 'Instagram' : 'Facebook';
   const stored = conversation.zernio_conversation_id?.trim();
   if (stored) return stored;
 
@@ -272,7 +275,7 @@ async function resolveZernioConversationId(
   if (identityError) {
     throw new SendMessageError(
       'db_error',
-      'Could not resolve the Facebook conversation participant',
+      `Could not resolve the ${platformLabel} conversation participant`,
       500
     );
   }
@@ -284,7 +287,7 @@ async function resolveZernioConversationId(
   if (!participantId) {
     throw new SendMessageError(
       'zernio_conversation_missing',
-      'This Facebook conversation has no Zernio conversation id. Receive a new message from the customer first.',
+      `This ${platformLabel} conversation has no Zernio conversation id. Receive a new message from the customer first.`,
       400
     );
   }
@@ -292,19 +295,19 @@ async function resolveZernioConversationId(
   const conversations = await listZernioInboxConversations({
     apiKey,
     accountId: zernioAccountId,
-    platform: 'facebook',
+    platform,
     limit: 100,
   });
   const match = conversations.find(
     (candidate) =>
       candidate.accountId === zernioAccountId &&
-      candidate.platform === 'facebook' &&
+      candidate.platform === platform &&
       candidate.participantId === participantId
   );
   if (!match) {
     throw new SendMessageError(
       'zernio_conversation_missing',
-      'Zernio could not find this Facebook conversation. Receive a new message from the customer first.',
+      `Zernio could not find this ${platformLabel} conversation. Receive a new message from the customer first.`,
       400
     );
   }
@@ -390,15 +393,15 @@ export async function sendMessageToConversation(
   const conversationChannel = conversation.channel as
     'whatsapp' | 'instagram' | 'messenger' | undefined;
   let outboundChannelId = conversation.channel_id ?? null;
-  let isZernioMessenger = false;
-  if (conversationChannel === 'messenger') {
+  let isZernioSocial = false;
+  if (conversationChannel === 'messenger' || conversationChannel === 'instagram') {
     if (
       typeof conversation.channel_id !== 'string' ||
       !conversation.channel_id
     ) {
       throw new SendMessageError(
         'unsupported_channel',
-        'This Messenger conversation is missing its configured channel',
+        `This ${conversationChannel} conversation is missing its configured channel`,
         400
       );
     }
@@ -411,7 +414,7 @@ export async function sendMessageToConversation(
       .maybeSingle();
     if (channelError) throw channelError;
 
-    if (channel?.integration_source !== 'zernio') {
+    if (conversationChannel === 'messenger' && channel?.integration_source !== 'zernio') {
       // Existing Messenger threads may still point at the old direct-Meta
       // channel after the account was moved to Zernio. If the connected
       // Zernio page is the same page, repair that reference before sending.
@@ -451,12 +454,22 @@ export async function sendMessageToConversation(
         );
       }
       outboundChannelId = connection.meta_channel_id;
+    } else if (
+      channel?.integration_source !== 'zernio' ||
+      channel.provider !== conversationChannel ||
+      channel.status !== 'connected'
+    ) {
+      throw new SendMessageError(
+        'unsupported_channel',
+        `This ${conversationChannel} conversation has no connected Zernio channel.`,
+        400
+      );
     }
-    isZernioMessenger = true;
+    isZernioSocial = true;
     if (messageType !== 'text') {
       throw new SendMessageError(
         'unsupported_message_type',
-        'Zernio Messenger currently supports text replies only.',
+        `Zernio ${conversationChannel} currently supports text replies only.`,
         400
       );
     }
@@ -493,7 +506,7 @@ export async function sendMessageToConversation(
   // Template row (for header + button components). isMessageTemplate
   // guards against a malformed local row crashing the send-builder.
   let templateRow: MessageTemplate | null = null;
-  if (!isZernioMessenger && messageType === 'template' && templateName) {
+  if (!isZernioSocial && messageType === 'template' && templateName) {
     const { data } = await db
       .from('message_templates')
       .select('*')
@@ -513,16 +526,19 @@ export async function sendMessageToConversation(
 
   let providerMessageId = '';
 
-  if (isZernioMessenger) {
+  if (isZernioSocial) {
     const admin = supabaseAdmin();
     const [connection, credentials] = await Promise.all([
-      getZernioConnection(admin, accountId),
+      getZernioConnectionForChannel(admin, accountId, outboundChannelId!),
       getZernioCredentials(admin, accountId),
     ]);
-    if (!connection || connection.status !== 'connected') {
+    if (
+      !connection || connection.status !== 'connected' ||
+      connection.provider !== conversationChannel
+    ) {
       throw new SendMessageError(
         'zernio_not_configured',
-        'Zernio Messenger is not connected for this account.',
+        `Zernio ${conversationChannel} is not connected for this account.`,
         400
       );
     }
@@ -539,9 +555,10 @@ export async function sendMessageToConversation(
       zernioConversationId = await resolveZernioConversationId(
         db,
         accountId,
-        conversation as ZernioMessengerConversation,
+        { ...conversation, channel_id: outboundChannelId } as ZernioSocialConversation,
         connection.zernio_account_id,
-        credentials.apiKey
+        credentials.apiKey,
+        conversationChannel === 'instagram' ? 'instagram' : 'facebook'
       );
       const result = await sendZernioInboxMessage({
         apiKey: credentials.apiKey,

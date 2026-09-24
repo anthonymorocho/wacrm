@@ -16,6 +16,7 @@ interface ZernioAccountRef {
 interface ZernioConnectionRow {
   account_id: string;
   meta_channel_id: string;
+  provider: 'messenger' | 'instagram';
   status: 'connected' | 'disconnected';
 }
 
@@ -40,7 +41,7 @@ async function findConnection(
 ): Promise<ZernioConnectionRow | null> {
   const { data, error } = await db
     .from('zernio_connections')
-    .select('account_id, meta_channel_id, status')
+    .select('account_id, meta_channel_id, provider, status')
     .eq('zernio_account_id', account.accountId)
     .eq('zernio_profile_id', account.profileId)
     .maybeSingle();
@@ -96,18 +97,24 @@ export async function processZernioEvent(
   }
 
   const message = parseZernioMessage(payload);
-  if (!message || connection.status !== 'connected') return 'ignored';
+  if (
+    !message || connection.status !== 'connected' ||
+    message.provider !== connection.provider
+  ) return 'ignored';
 
   const { data: channel, error } = await db
     .from('meta_channels')
     .select(
-      'id, account_id, user_id, provider, external_account_id, display_name, status, connected_at, created_at, updated_at'
+      'id, account_id, user_id, provider, integration_source, external_account_id, display_name, status, connected_at, created_at, updated_at'
     )
     .eq('id', connection.meta_channel_id)
     .eq('account_id', connection.account_id)
     .maybeSingle();
   if (error) throw error;
-  if (!channel) return 'ignored';
+  if (
+    !channel || channel.provider !== message.provider ||
+    channel.integration_source !== 'zernio'
+  ) return 'ignored';
 
   return processNormalizedMetaMessage(db, channel as MetaChannel, message);
 }

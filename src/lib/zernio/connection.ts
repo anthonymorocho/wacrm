@@ -1,5 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
+import type { ZernioProvider } from './client';
+
 export interface ZernioConnectionRow {
   id: string;
   account_id: string;
@@ -7,7 +9,10 @@ export interface ZernioConnectionRow {
   meta_channel_id: string;
   zernio_profile_id: string;
   zernio_account_id: string;
-  facebook_page_id: string;
+  provider: ZernioProvider;
+  external_account_id: string;
+  display_name: string | null;
+  facebook_page_id: string | null;
   facebook_page_name: string | null;
   status: 'connected' | 'disconnected';
   connected_at: string;
@@ -25,16 +30,18 @@ export class ZernioConnectionConflictError extends Error {
 }
 
 const CONNECTION_FIELDS =
-  'id, account_id, user_id, meta_channel_id, zernio_profile_id, zernio_account_id, facebook_page_id, facebook_page_name, status, connected_at, created_at, updated_at';
+  'id, account_id, user_id, meta_channel_id, zernio_profile_id, zernio_account_id, provider, external_account_id, display_name, facebook_page_id, facebook_page_name, status, connected_at, created_at, updated_at';
 
 async function findByAccount(
   db: SupabaseClient,
-  accountId: string
+  accountId: string,
+  provider: ZernioProvider
 ): Promise<ZernioConnectionRow | null> {
   const { data, error } = await db
     .from('zernio_connections')
     .select(CONNECTION_FIELDS)
     .eq('account_id', accountId)
+    .eq('provider', provider)
     .maybeSingle();
   if (error) throw error;
   return (data as ZernioConnectionRow | null) ?? null;
@@ -55,54 +62,81 @@ async function findByZernioAccount(
 
 export async function getZernioConnection(
   db: SupabaseClient,
-  accountId: string
+  accountId: string,
+  provider: ZernioProvider = 'messenger'
 ): Promise<ZernioConnectionRow | null> {
-  return findByAccount(db, accountId);
+  return findByAccount(db, accountId, provider);
 }
 
-/**
- * Persist the selected Facebook Page only after both Zernio identifiers have
- * been checked against the same CRM account. The Meta channel remains the
- * Inbox identity, so the existing contact/conversation pipeline is reused.
- */
-export async function saveZernioMessengerConnection(
+export async function getZernioConnections(
+  db: SupabaseClient,
+  accountId: string
+): Promise<ZernioConnectionRow[]> {
+  const { data, error } = await db
+    .from('zernio_connections')
+    .select(CONNECTION_FIELDS)
+    .eq('account_id', accountId)
+    .order('provider', { ascending: true });
+  if (error) throw error;
+  return (data as ZernioConnectionRow[] | null) ?? [];
+}
+
+export async function getZernioConnectionForChannel(
+  db: SupabaseClient,
+  accountId: string,
+  channelId: string
+): Promise<ZernioConnectionRow | null> {
+  const { data, error } = await db
+    .from('zernio_connections')
+    .select(CONNECTION_FIELDS)
+    .eq('account_id', accountId)
+    .eq('meta_channel_id', channelId)
+    .maybeSingle();
+  if (error) throw error;
+  return (data as ZernioConnectionRow | null) ?? null;
+}
+
+/** Persist one provider account while keeping the CRM tenant's other channels. */
+export async function saveZernioChannelConnection(
   db: SupabaseClient,
   args: {
     accountId: string;
     userId: string;
     profileId: string;
     zernioAccountId: string;
-    facebookPageId: string;
-    facebookPageName: string | null;
+    provider: ZernioProvider;
+    externalAccountId: string;
+    displayName: string | null;
   }
 ): Promise<ZernioConnectionRow> {
-  const [existingForAccount, existingForZernioAccount] = await Promise.all([
-    findByAccount(db, args.accountId),
+  const [existingForProvider, existingForZernioAccount] = await Promise.all([
+    findByAccount(db, args.accountId, args.provider),
     findByZernioAccount(db, args.zernioAccountId),
   ]);
 
-  for (const existing of [existingForAccount, existingForZernioAccount]) {
+  for (const existing of [existingForProvider, existingForZernioAccount]) {
     if (
       existing &&
       (existing.account_id !== args.accountId ||
         existing.zernio_profile_id !== args.profileId ||
-        existing.zernio_account_id !== args.zernioAccountId)
+        existing.zernio_account_id !== args.zernioAccountId ||
+        existing.provider !== args.provider)
     ) {
       throw new ZernioConnectionConflictError();
     }
   }
 
-  const displayName = args.facebookPageName || 'Facebook Messenger';
   const channelPayload = {
     account_id: args.accountId,
     user_id: args.userId,
     integration_source: 'zernio',
-    provider: 'messenger',
-    external_account_id: args.facebookPageId,
+    provider: args.provider,
+    external_account_id: args.externalAccountId,
     zernio_profile_id: args.profileId,
     zernio_account_id: args.zernioAccountId,
-    facebook_page_id: args.facebookPageId,
-    display_name: displayName,
+    facebook_page_id:
+      args.provider === 'messenger' ? args.externalAccountId : null,
+    display_name: args.displayName,
     access_token: null,
     app_secret: null,
     verify_token: null,
@@ -110,10 +144,11 @@ export async function saveZernioMessengerConnection(
     connected_at: new Date().toISOString(),
   };
 
-  let channelId: string | null = null;
-  const samePage = existingForAccount?.facebook_page_id === args.facebookPageId;
-  if (existingForAccount && samePage) {
-    channelId = existingForAccount.meta_channel_id;
+  let channelId: string;
+  const sameExternalAccount =
+    existingForProvider?.external_account_id === args.externalAccountId;
+  if (existingForProvider && sameExternalAccount) {
+    channelId = existingForProvider.meta_channel_id;
     const { data, error } = await db
       .from('meta_channels')
       .update(channelPayload)
@@ -136,36 +171,41 @@ export async function saveZernioMessengerConnection(
     }
     channelId = data.id as string;
 
-    // A page change gets a new Inbox channel. Keeping the old channel row
-    // preserves historical message attribution instead of relabelling old
-    // conversations as belonging to the newly selected Page.
-    if (existingForAccount) {
+    // Preserve old threads on the previous channel when a provider account changes.
+    if (existingForProvider) {
       const { error: oldChannelError } = await db
         .from('meta_channels')
         .update({
           status: 'disconnected',
           updated_at: new Date().toISOString(),
         })
-        .eq('id', existingForAccount.meta_channel_id)
+        .eq('id', existingForProvider.meta_channel_id)
         .eq('account_id', args.accountId);
       if (oldChannelError) throw oldChannelError;
     }
   }
 
-  const connectionPayload = {
-    account_id: args.accountId,
-    user_id: args.userId,
-    meta_channel_id: channelId,
-    zernio_profile_id: args.profileId,
-    zernio_account_id: args.zernioAccountId,
-    facebook_page_id: args.facebookPageId,
-    facebook_page_name: args.facebookPageName,
-    status: 'connected',
-    connected_at: new Date().toISOString(),
-  };
   const { data, error } = await db
     .from('zernio_connections')
-    .upsert(connectionPayload, { onConflict: 'account_id' })
+    .upsert(
+      {
+        account_id: args.accountId,
+        user_id: args.userId,
+        meta_channel_id: channelId,
+        zernio_profile_id: args.profileId,
+        zernio_account_id: args.zernioAccountId,
+        provider: args.provider,
+        external_account_id: args.externalAccountId,
+        display_name: args.displayName,
+        facebook_page_id:
+          args.provider === 'messenger' ? args.externalAccountId : null,
+        facebook_page_name:
+          args.provider === 'messenger' ? args.displayName : null,
+        status: 'connected',
+        connected_at: new Date().toISOString(),
+      },
+      { onConflict: 'account_id,provider' }
+    )
     .select(CONNECTION_FIELDS)
     .single();
   if (error || !data) {

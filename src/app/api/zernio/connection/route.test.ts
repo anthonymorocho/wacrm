@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   requireRole: vi.fn(),
   supabaseAdmin: vi.fn(),
-  getZernioConnection: vi.fn(),
+  getZernioConnections: vi.fn(),
   hasZernioCredentials: vi.fn(),
 }));
 
@@ -17,7 +17,7 @@ vi.mock('@/lib/meta/admin-client', () => ({
   supabaseAdmin: mocks.supabaseAdmin,
 }));
 vi.mock('@/lib/zernio/connection', () => ({
-  getZernioConnection: mocks.getZernioConnection,
+  getZernioConnections: mocks.getZernioConnections,
 }));
 vi.mock('@/lib/zernio/profile', () => ({
   hasZernioCredentials: mocks.hasZernioCredentials,
@@ -34,14 +34,24 @@ describe('/api/zernio/connection', () => {
   });
 
   it('returns only safe connection metadata', async () => {
-    mocks.getZernioConnection.mockResolvedValue({
-      id: 'connection-1',
-      facebook_page_id: 'page-1',
-      facebook_page_name: 'Acme Page',
-      status: 'connected',
-      connected_at: '2026-09-17T12:00:00.000Z',
-      zernio_account_id: 'secret-account-id',
-    });
+    mocks.getZernioConnections.mockResolvedValue([
+      {
+        id: 'connection-1',
+        provider: 'messenger',
+        display_name: 'Acme Page',
+        status: 'connected',
+        connected_at: '2026-09-17T12:00:00.000Z',
+        zernio_account_id: 'secret-account-id',
+      },
+      {
+        id: 'connection-2',
+        provider: 'instagram',
+        display_name: 'Acme IG',
+        status: 'connected',
+        connected_at: '2026-09-18T12:00:00.000Z',
+        zernio_account_id: 'secret-instagram-account',
+      },
+    ]);
 
     const response = await GET();
 
@@ -49,14 +59,24 @@ describe('/api/zernio/connection', () => {
     const body = await response.json();
     expect(body).toEqual({
       configured: true,
-      connection: {
-        id: 'connection-1',
-        page_id: 'page-1',
-        page_name: 'Acme Page',
-        status: 'connected',
-        connected_at: '2026-09-17T12:00:00.000Z',
-      },
+      connections: [
+        {
+          id: 'connection-1',
+          provider: 'messenger',
+          display_name: 'Acme Page',
+          status: 'connected',
+          connected_at: '2026-09-17T12:00:00.000Z',
+        },
+        {
+          id: 'connection-2',
+          provider: 'instagram',
+          display_name: 'Acme IG',
+          status: 'connected',
+          connected_at: '2026-09-18T12:00:00.000Z',
+        },
+      ],
     });
     expect(JSON.stringify(body)).not.toContain('secret-account-id');
+    expect(JSON.stringify(body)).not.toContain('secret-instagram-account');
   });
 });

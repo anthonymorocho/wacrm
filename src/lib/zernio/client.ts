@@ -25,6 +25,9 @@ export class ZernioApiError extends Error {
   }
 }
 
+export type ZernioSocialPlatform = 'facebook' | 'instagram';
+export type ZernioProvider = 'messenger' | 'instagram';
+
 function getApiKey(apiKey: string): string {
   const normalized = apiKey.trim();
   if (!normalized) {
@@ -78,6 +81,7 @@ export async function getZernioConnectUrl(args: {
   apiKey: string;
   profileId: string;
   redirectUrl: string;
+  platform?: ZernioSocialPlatform;
 }): Promise<string> {
   const query = new URLSearchParams({
     profileId: args.profileId,
@@ -85,12 +89,54 @@ export async function getZernioConnectUrl(args: {
   });
   const result = await zernioRequest<{ authUrl?: unknown }>(
     args.apiKey,
-    `/v1/connect/facebook?${query.toString()}`
+    `/v1/connect/${args.platform ?? 'facebook'}?${query.toString()}`
   );
   if (typeof result.authUrl !== 'string' || !result.authUrl) {
     throw new Error('Zernio did not return an authorization URL');
   }
   return result.authUrl;
+}
+
+export interface ZernioConnectedAccount {
+  id: string;
+  platform: string;
+  username: string | null;
+  displayName: string | null;
+  isActive: boolean;
+}
+
+/** List connected accounts for one profile so OAuth callbacks can be verified. */
+export async function listZernioAccounts(args: {
+  apiKey: string;
+  profileId: string;
+}): Promise<ZernioConnectedAccount[]> {
+  const query = new URLSearchParams({ profileId: args.profileId });
+  const result = await zernioRequest<{ accounts?: unknown }>(
+    args.apiKey,
+    `/v1/accounts?${query.toString()}`
+  );
+  if (!Array.isArray(result.accounts)) return [];
+
+  return result.accounts.flatMap((value): ZernioConnectedAccount[] => {
+    if (!isRecord(value)) return [];
+    const id =
+      typeof value._id === 'string'
+        ? value._id
+        : typeof value.accountId === 'string'
+          ? value.accountId
+          : null;
+    if (!id || typeof value.platform !== 'string') return [];
+    return [
+      {
+        id,
+        platform: value.platform,
+        username: typeof value.username === 'string' ? value.username : null,
+        displayName:
+          typeof value.displayName === 'string' ? value.displayName : null,
+        isActive: value.isActive === true,
+      },
+    ];
+  });
 }
 
 export interface ZernioProfile {

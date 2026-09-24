@@ -4,9 +4,13 @@ import { requireRole } from '@/lib/auth/account';
 import { supabaseAdmin } from '@/lib/meta/admin-client';
 import {
   ZernioConnectionConflictError,
-  saveZernioMessengerConnection,
+  saveZernioChannelConnection,
 } from '@/lib/zernio/connection';
-import { getFacebookPageSelection } from '@/lib/zernio/client';
+import {
+  getFacebookPageSelection,
+  listZernioAccounts,
+  type ZernioProvider,
+} from '@/lib/zernio/client';
 import { getZernioCredentials, getZernioProfile } from '@/lib/zernio/profile';
 import { publicOrigin } from '@/lib/zernio/public-origin';
 
@@ -21,7 +25,14 @@ function settingsRedirect(request: Request, result: 'connected' | 'error') {
 export async function GET(request: Request) {
   const params = new URL(request.url).searchParams;
   if (params.get('error')) return settingsRedirect(request, 'error');
-  if (params.get('connected') !== 'facebook') {
+  const connectedPlatform = params.get('connected');
+  const provider: ZernioProvider | null =
+    connectedPlatform === 'facebook'
+      ? 'messenger'
+      : connectedPlatform === 'instagram'
+        ? 'instagram'
+        : null;
+  if (!provider || !connectedPlatform) {
     return settingsRedirect(request, 'error');
   }
 
@@ -40,18 +51,37 @@ export async function GET(request: Request) {
       return settingsRedirect(request, 'error');
     }
 
-    const selectedPage = await getFacebookPageSelection({
+    const connectedAccounts = await listZernioAccounts({
       apiKey: credentials.apiKey,
-      accountId: zernioAccountId,
+      profileId,
     });
-    await saveZernioMessengerConnection(admin, {
+    const connectedAccount = connectedAccounts.find(
+      (account) =>
+        account.id === zernioAccountId &&
+        account.platform === connectedPlatform &&
+        account.isActive
+    );
+    if (!connectedAccount) return settingsRedirect(request, 'error');
+
+    const selectedPage =
+      provider === 'messenger'
+        ? await getFacebookPageSelection({
+            apiKey: credentials.apiKey,
+            accountId: zernioAccountId,
+          })
+        : null;
+    await saveZernioChannelConnection(admin, {
       accountId: context.accountId,
       userId: context.userId,
       profileId,
       zernioAccountId,
-      facebookPageId: selectedPage.pageId,
-      facebookPageName:
-        selectedPage.pageName ?? params.get('username')?.trim() ?? null,
+      provider,
+      externalAccountId: selectedPage?.pageId ?? connectedAccount.id,
+      displayName:
+        selectedPage?.pageName ??
+        connectedAccount.displayName ??
+        params.get('username')?.trim() ??
+        connectedAccount.username,
     });
 
     return settingsRedirect(request, 'connected');

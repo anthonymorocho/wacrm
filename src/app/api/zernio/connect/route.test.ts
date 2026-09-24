@@ -80,7 +80,34 @@ describe('/api/zernio/connect', () => {
       apiKey: 'zernio-key',
       profileId: 'profile-1',
       redirectUrl: 'https://crm.example.com/api/zernio/callback',
+      platform: 'facebook',
     });
+  });
+
+  it('starts Instagram OAuth in the same configured Zernio profile', async () => {
+    const response = await GET(
+      new Request(
+        'http://localhost/api/zernio/connect?platform=instagram',
+        { method: 'GET' }
+      )
+    );
+
+    expect(response.status).toBe(200);
+    expect(mocks.getZernioConnectUrl).toHaveBeenCalledWith({
+      apiKey: 'zernio-key',
+      profileId: 'profile-1',
+      redirectUrl: 'https://crm.example.com/api/zernio/callback',
+      platform: 'instagram',
+    });
+  });
+
+  it('rejects unsupported platforms before calling Zernio', async () => {
+    const response = await GET(
+      new Request('http://localhost/api/zernio/connect?platform=tiktok')
+    );
+
+    expect(response.status).toBe(400);
+    expect(mocks.getZernioConnectUrl).not.toHaveBeenCalled();
   });
 
   it('refuses to start when account credentials are missing', async () => {

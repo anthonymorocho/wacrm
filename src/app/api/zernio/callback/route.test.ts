@@ -6,7 +6,8 @@ const mocks = vi.hoisted(() => ({
   getZernioProfile: vi.fn(),
   getZernioCredentials: vi.fn(),
   getFacebookPageSelection: vi.fn(),
-  saveZernioMessengerConnection: vi.fn(),
+  listZernioAccounts: vi.fn(),
+  saveZernioChannelConnection: vi.fn(),
 }));
 
 vi.mock('@/lib/auth/account', () => ({ requireRole: mocks.requireRole }));
@@ -19,10 +20,11 @@ vi.mock('@/lib/zernio/profile', () => ({
 }));
 vi.mock('@/lib/zernio/client', () => ({
   getFacebookPageSelection: mocks.getFacebookPageSelection,
+  listZernioAccounts: mocks.listZernioAccounts,
 }));
 vi.mock('@/lib/zernio/connection', () => ({
   ZernioConnectionConflictError: class ZernioConnectionConflictError extends Error {},
-  saveZernioMessengerConnection: mocks.saveZernioMessengerConnection,
+  saveZernioChannelConnection: mocks.saveZernioChannelConnection,
 }));
 
 import { GET } from './route';
@@ -47,7 +49,16 @@ describe('/api/zernio/callback', () => {
       pageId: 'page-1',
       pageName: 'Acme Page',
     });
-    mocks.saveZernioMessengerConnection.mockResolvedValue({});
+    mocks.listZernioAccounts.mockResolvedValue([
+      {
+        id: 'zernio-account-1',
+        platform: 'facebook',
+        username: 'acme',
+        displayName: 'Acme',
+        isActive: true,
+      },
+    ]);
+    mocks.saveZernioChannelConnection.mockResolvedValue({});
   });
 
   afterEach(() => {
@@ -73,15 +84,16 @@ describe('/api/zernio/callback', () => {
       apiKey: 'zernio-key',
       accountId: 'zernio-account-1',
     });
-    expect(mocks.saveZernioMessengerConnection).toHaveBeenCalledWith(
+    expect(mocks.saveZernioChannelConnection).toHaveBeenCalledWith(
       {},
       expect.objectContaining({
         accountId: 'account-1',
         userId: 'user-1',
         profileId: 'profile-1',
         zernioAccountId: 'zernio-account-1',
-        facebookPageId: 'page-1',
-        facebookPageName: 'Acme Page',
+        provider: 'messenger',
+        externalAccountId: 'page-1',
+        displayName: 'Acme Page',
       })
     );
   });
@@ -102,7 +114,56 @@ describe('/api/zernio/callback', () => {
       'zernio=error'
     );
     expect(mocks.getFacebookPageSelection).not.toHaveBeenCalled();
-    expect(mocks.saveZernioMessengerConnection).not.toHaveBeenCalled();
+    expect(mocks.saveZernioChannelConnection).not.toHaveBeenCalled();
+  });
+
+  it('stores Instagram under the existing profile without resolving a Facebook Page', async () => {
+    mocks.listZernioAccounts.mockResolvedValue([
+      {
+        id: 'zernio-instagram-1',
+        platform: 'instagram',
+        username: 'acme.ig',
+        displayName: 'Acme Instagram',
+        isActive: true,
+      },
+    ]);
+    const response = await GET(
+      new Request(
+        'https://crm.example.com/api/zernio/callback?connected=instagram&profileId=profile-1&accountId=zernio-instagram-1&username=acme.ig',
+        { method: 'GET' }
+      )
+    );
+
+    expect(new URL(response.headers.get('location')!).search).toContain(
+      'zernio=connected'
+    );
+    expect(mocks.getFacebookPageSelection).not.toHaveBeenCalled();
+    expect(mocks.saveZernioChannelConnection).toHaveBeenCalledWith(
+      {},
+      expect.objectContaining({
+        accountId: 'account-1',
+        userId: 'user-1',
+        profileId: 'profile-1',
+        zernioAccountId: 'zernio-instagram-1',
+        provider: 'instagram',
+        externalAccountId: 'zernio-instagram-1',
+        displayName: 'Acme Instagram',
+      })
+    );
+  });
+
+  it('does not save an Instagram callback account that is absent from the profile', async () => {
+    const response = await GET(
+      new Request(
+        'https://crm.example.com/api/zernio/callback?connected=instagram&profileId=profile-1&accountId=unlinked-instagram',
+        { method: 'GET' }
+      )
+    );
+
+    expect(new URL(response.headers.get('location')!).search).toContain(
+      'zernio=error'
+    );
+    expect(mocks.saveZernioChannelConnection).not.toHaveBeenCalled();
   });
 
   it('handles a user cancelling Facebook consent', async () => {

@@ -6,14 +6,29 @@ import {
   ZernioConfigurationError,
   ensureZernioWebhook,
   getZernioConnectUrl,
+  type ZernioSocialPlatform,
 } from '@/lib/zernio/client';
 import { getZernioCredentials, getZernioProfile } from '@/lib/zernio/profile';
 import { publicOrigin } from '@/lib/zernio/public-origin';
 
-/** GET /api/zernio/connect — start Zernio's hosted Facebook Page picker. */
+/** GET /api/zernio/connect — start Zernio's hosted Facebook or Instagram flow. */
 export async function GET(request: Request) {
+  const requestedPlatform = new URL(request.url).searchParams.get('platform');
+  if (
+    requestedPlatform !== null &&
+    requestedPlatform !== 'facebook' &&
+    requestedPlatform !== 'instagram'
+  ) {
+    return NextResponse.json(
+      { error: 'platform must be facebook or instagram' },
+      { status: 400 }
+    );
+  }
+
   try {
     const context = await requireRole('admin');
+    const platform: ZernioSocialPlatform =
+      requestedPlatform === 'instagram' ? 'instagram' : 'facebook';
     const admin = supabaseAdmin();
     const profile = await getZernioProfile(admin, context.accountId);
     const credentials = await getZernioCredentials(admin, context.accountId);
@@ -35,6 +50,7 @@ export async function GET(request: Request) {
       apiKey: credentials.apiKey,
       profileId: profile.zernio_profile_id,
       redirectUrl: `${origin}/api/zernio/callback`,
+      platform,
     });
 
     return NextResponse.json({ auth_url: authUrl });

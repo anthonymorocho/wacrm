@@ -400,7 +400,7 @@ export async function persistZernioCommentedPost(
   return { ...post, comments };
 }
 
-/** Mirror one comment.received delivery and its post reference locally. */
+/** Store a comment delivery; Instagram requires an existing organic mirror. */
 export async function persistZernioCommentEvent(
   db: SupabaseClient,
   args: {
@@ -409,27 +409,46 @@ export async function persistZernioCommentEvent(
     metaChannelId: string | null;
     event: ParsedZernioCommentEvent;
   }
-): Promise<ZernioCommentRow> {
-  const post = await upsertPost(db, {
-    accountId: args.accountId,
-    zernioAccountId: args.zernioAccountId,
-    metaChannelId: args.metaChannelId,
-    providerPostId: args.event.providerPostId,
-    platformPostId: args.event.platformPostId,
-    platform: args.event.platform,
-    content: args.event.post.content,
-    picture: args.event.post.picture,
-    permalink: args.event.post.permalink,
-    createdTime: args.event.post.createdTime,
-    commentCount: 1,
-    likeCount: 0,
-  });
+): Promise<ZernioCommentRow | null> {
+  let post: Pick<ZernioPostRow, 'id' | 'platform_post_id' | 'platform'>;
+  if (args.event.platform === 'instagram') {
+    if (!args.metaChannelId) return null;
+    // Webhook postId is an internal Zernio ID and may differ from the organic
+    // listing's post ID. The platform post ID is shared by both sources.
+    const { data, error } = await db
+      .from('social_posts')
+      .select('id, platform_post_id, platform')
+      .eq('account_id', args.accountId)
+      .eq('zernio_account_id', args.zernioAccountId)
+      .eq('meta_channel_id', args.metaChannelId)
+      .eq('platform', 'instagram')
+      .eq('platform_post_id', args.event.platformPostId)
+      .maybeSingle();
+    if (error) throw error;
+    if (!data) return null;
+    post = data as typeof post;
+  } else {
+    post = await upsertPost(db, {
+      accountId: args.accountId,
+      zernioAccountId: args.zernioAccountId,
+      metaChannelId: args.metaChannelId,
+      providerPostId: args.event.providerPostId,
+      platformPostId: args.event.platformPostId,
+      platform: args.event.platform,
+      content: args.event.post.content,
+      picture: args.event.post.picture,
+      permalink: args.event.post.permalink,
+      createdTime: args.event.post.createdTime,
+      commentCount: 1,
+      likeCount: 0,
+    });
+  }
   return upsertComment(db, {
     accountId: args.accountId,
     zernioAccountId: args.zernioAccountId,
     socialPostId: post.id,
-    platformPostId: args.event.platformPostId,
-    platform: args.event.platform,
+    platformPostId: post.platform_post_id,
+    platform: post.platform,
     providerCommentId: args.event.comment.id,
     parentCommentId: args.event.comment.parentCommentId,
     message: args.event.comment.text,

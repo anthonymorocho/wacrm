@@ -20,6 +20,14 @@ interface ZernioConnectionRow {
   status: 'connected' | 'disconnected';
 }
 
+function commentPlatformForProvider(
+  provider: ZernioConnectionRow['provider']
+): 'facebook' | 'instagram' | null {
+  if (provider === 'messenger') return 'facebook';
+  if (provider === 'instagram') return 'instagram';
+  return null;
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
@@ -89,17 +97,16 @@ export async function processZernioEvent(
     if (
       !comment ||
       connection.status !== 'connected' ||
-      comment.platform !==
-        (connection.provider === 'instagram' ? 'instagram' : 'facebook')
+      comment.platform !== commentPlatformForProvider(connection.provider)
     )
       return 'ignored';
-    await persistZernioCommentEvent(db, {
+    const stored = await persistZernioCommentEvent(db, {
       accountId: connection.account_id,
       zernioAccountId: account.accountId,
       metaChannelId: connection.meta_channel_id,
       event: comment,
     });
-    return 'inserted';
+    return stored ? 'inserted' : 'ignored';
   }
 
   const message = parseZernioMessage(payload);

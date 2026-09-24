@@ -121,6 +121,56 @@ describe('processZernioEvent comment routing', () => {
       expect.objectContaining({ metaChannelId: 'channel-ig' })
     );
   });
+
+  it('ignores an Instagram comment when no organic post was mirrored', async () => {
+    builder.maybeSingle.mockResolvedValueOnce({
+      data: {
+        account_id: 'account-1',
+        meta_channel_id: 'channel-ig',
+        provider: 'instagram',
+        status: 'connected',
+      },
+      error: null,
+    });
+    comments.parseZernioCommentEvent.mockReturnValueOnce({
+      accountId: 'zernio-account-1',
+      profileId: 'zernio-profile-1',
+      providerPostId: 'internal-post-1',
+      platformPostId: 'unmirrored-media',
+      platform: 'instagram',
+      post: {},
+      comment: {},
+      rawPayload: {},
+    });
+    comments.persistZernioCommentEvent.mockResolvedValueOnce(null);
+
+    const result = await processZernioEvent({
+      event: 'comment.received',
+      account: { id: 'zernio-account-1', profileId: 'zernio-profile-1' },
+    });
+
+    expect(result).toBe('ignored');
+  });
+
+  it('ignores a comment when the mapped provider is unexpected', async () => {
+    builder.maybeSingle.mockResolvedValueOnce({
+      data: {
+        account_id: 'account-1',
+        meta_channel_id: 'channel-unknown',
+        provider: 'unknown',
+        status: 'connected',
+      },
+      error: null,
+    });
+
+    const result = await processZernioEvent({
+      event: 'comment.received',
+      account: { id: 'zernio-account-1', profileId: 'zernio-profile-1' },
+    });
+
+    expect(result).toBe('ignored');
+    expect(comments.persistZernioCommentEvent).not.toHaveBeenCalled();
+  });
 });
 
 describe('processZernioEvent message routing', () => {

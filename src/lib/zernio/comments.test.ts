@@ -45,7 +45,7 @@ describe('Zernio comments', () => {
     );
   });
 
-  it('stores Instagram on both rows for an incoming comment', async () => {
+  it('stores an Instagram webhook comment on the matching organic mirror', async () => {
     const event = parseZernioCommentEvent({
       event: 'comment.received',
       account: {
@@ -53,12 +53,178 @@ describe('Zernio comments', () => {
         profileId: 'profile-1',
         platform: 'instagram',
       },
-      post: { id: 'ig-post-1', platformPostId: 'media-1' },
+      post: { id: 'internal-post-1', platformPostId: 'media-1' },
       comment: {
         id: 'ig-comment-1',
         platformPostId: 'media-1',
         platform: 'instagram',
         text: 'Nice photo',
+        author: { id: 'person-1' },
+        createdAt: '2026-09-17T12:00:00.000Z',
+      },
+    });
+    expect(event).not.toBeNull();
+    const rows: Array<{ table: string; value: Record<string, unknown> }> = [];
+    const filters: Array<[string, unknown]> = [];
+    const mirror = {
+      select: () => mirror,
+      eq: (column: string, value: unknown) => {
+        filters.push([column, value]);
+        return mirror;
+      },
+      maybeSingle: async () => ({
+        data: {
+          id: 'local-post-1',
+          provider_post_id: 'organic-list-post-1',
+          platform_post_id: 'media-1',
+          platform: 'instagram',
+        },
+        error: null,
+      }),
+      upsert: (value: Record<string, unknown>) => {
+        rows.push({ table: 'social_posts', value });
+        return {
+          select: () => ({
+            single: async () => ({
+              data: {
+                id: 'created-post',
+                platform_post_id: 'media-1',
+                platform: 'instagram',
+              },
+              error: null,
+            }),
+          }),
+        };
+      },
+    };
+    const db = {
+      from: (table: string) =>
+        table === 'social_posts'
+          ? mirror
+          : {
+              upsert: (value: Record<string, unknown>) => {
+                rows.push({ table, value });
+                return {
+                  select: () => ({
+                    single: async () => ({
+                      data: { id: 'local-comment-1', platform: 'instagram' },
+                      error: null,
+                    }),
+                  }),
+                };
+              },
+            },
+    } as unknown as SupabaseClient;
+
+    await persistZernioCommentEvent(db, {
+      accountId: 'account-1',
+      zernioAccountId: 'ig-account-1',
+      metaChannelId: 'channel-ig',
+      event: event!,
+    });
+
+    expect(filters).toEqual([
+      ['account_id', 'account-1'],
+      ['zernio_account_id', 'ig-account-1'],
+      ['meta_channel_id', 'channel-ig'],
+      ['platform', 'instagram'],
+      ['platform_post_id', 'media-1'],
+    ]);
+    expect(rows).toEqual([
+      {
+        table: 'social_comments',
+        value: expect.objectContaining({
+          account_id: 'account-1',
+          social_post_id: 'local-post-1',
+          platform: 'instagram',
+          provider_comment_id: 'ig-comment-1',
+        }),
+      },
+    ]);
+  });
+
+  it('ignores an unmirrored Instagram webhook comment without writing rows', async () => {
+    const event = parseZernioCommentEvent({
+      event: 'comment.received',
+      account: {
+        accountId: 'ig-account-1',
+        profileId: 'profile-1',
+        platform: 'instagram',
+      },
+      post: { id: null, platformPostId: 'unmirrored-media' },
+      comment: {
+        id: 'ig-comment-2',
+        postId: null,
+        platformPostId: 'unmirrored-media',
+        platform: 'instagram',
+        text: 'Hello',
+        author: { id: 'person-2' },
+        createdAt: '2026-09-17T12:00:00.000Z',
+      },
+    });
+    expect(event).not.toBeNull();
+    const writes: string[] = [];
+    const mirror = {
+      select: () => mirror,
+      eq: () => mirror,
+      maybeSingle: async () => ({ data: null, error: null }),
+      upsert: () => {
+        writes.push('social_posts');
+        return {
+          select: () => ({
+            single: async () => ({
+              data: {
+                id: 'created-post',
+                platform_post_id: 'unmirrored-media',
+              },
+              error: null,
+            }),
+          }),
+        };
+      },
+    };
+    const db = {
+      from: (table: string) =>
+        table === 'social_posts'
+          ? mirror
+          : {
+              upsert: () => {
+                writes.push(table);
+                return {
+                  select: () => ({
+                    single: async () => ({ data: {}, error: null }),
+                  }),
+                };
+              },
+            },
+    } as unknown as SupabaseClient;
+
+    const result = await persistZernioCommentEvent(db, {
+      accountId: 'account-1',
+      zernioAccountId: 'ig-account-1',
+      metaChannelId: 'channel-ig',
+      event: event!,
+    });
+
+    expect(result).toBeNull();
+    expect(writes).toEqual([]);
+  });
+
+  it('continues mirroring Facebook posts from comment webhooks', async () => {
+    const event = parseZernioCommentEvent({
+      event: 'comment.received',
+      account: {
+        accountId: 'fb-account-1',
+        profileId: 'profile-1',
+        platform: 'facebook',
+      },
+      post: { id: null, platformPostId: 'fb-post-1' },
+      comment: {
+        id: 'fb-comment-1',
+        postId: null,
+        platformPostId: 'fb-post-1',
+        platform: 'facebook',
+        text: 'Hello',
         author: { id: 'person-1' },
         createdAt: '2026-09-17T12:00:00.000Z',
       },
@@ -75,11 +241,11 @@ describe('Zernio comments', () => {
                 data:
                   table === 'social_posts'
                     ? {
-                        id: 'local-post-1',
-                        platform_post_id: 'media-1',
-                        platform: 'instagram',
+                        id: 'local-fb-post',
+                        platform_post_id: 'fb-post-1',
+                        platform: 'facebook',
                       }
-                    : { id: 'local-comment-1', platform: 'instagram' },
+                    : { id: 'local-fb-comment', platform: 'facebook' },
                 error: null,
               }),
             }),
@@ -90,8 +256,8 @@ describe('Zernio comments', () => {
 
     await persistZernioCommentEvent(db, {
       accountId: 'account-1',
-      zernioAccountId: 'ig-account-1',
-      metaChannelId: 'channel-ig',
+      zernioAccountId: 'fb-account-1',
+      metaChannelId: 'channel-fb',
       event: event!,
     });
 
@@ -99,19 +265,15 @@ describe('Zernio comments', () => {
       {
         table: 'social_posts',
         value: expect.objectContaining({
-          account_id: 'account-1',
-          meta_channel_id: 'channel-ig',
-          platform: 'instagram',
-          provider_post_id: 'ig-post-1',
+          provider_post_id: 'fb-post-1',
+          platform: 'facebook',
         }),
       },
       {
         table: 'social_comments',
         value: expect.objectContaining({
-          account_id: 'account-1',
-          social_post_id: 'local-post-1',
-          platform: 'instagram',
-          provider_comment_id: 'ig-comment-1',
+          social_post_id: 'local-fb-post',
+          platform: 'facebook',
         }),
       },
     ]);

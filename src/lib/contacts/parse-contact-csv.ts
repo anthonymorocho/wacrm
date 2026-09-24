@@ -33,6 +33,8 @@ export function parseTagCell(value: string | undefined): string[] {
 
 export interface ParseContactCsvResult {
   rows: ParsedContactRow[];
+  /** True when the CSV header includes a `phone` column. */
+  hasPhoneColumn: boolean;
   /** True when the CSV header includes a `tags` column. */
   hasTagsColumn: boolean;
   /** True when the CSV header includes a `company` column. */
@@ -40,24 +42,35 @@ export interface ParseContactCsvResult {
 }
 
 export function parseContactCsv(text: string): ParseContactCsvResult {
-  const lines = text.trim().split(/\r?\n/);
-  if (lines.length < 2) {
-    return { rows: [], hasTagsColumn: false, hasCompanyColumn: false };
+  const content = text.replace(/^\uFEFF/, '').trim();
+  if (!content) {
+    return {
+      rows: [],
+      hasPhoneColumn: false,
+      hasTagsColumn: false,
+      hasCompanyColumn: false,
+    };
   }
+  const lines = content.split(/\r?\n/);
 
   const headers = lines[0]
     .split(',')
     .map((h) => h.trim().toLowerCase().replace(/["']/g, ''));
 
   const phoneIdx = headers.indexOf('phone');
-  if (phoneIdx === -1) {
-    return { rows: [], hasTagsColumn: false, hasCompanyColumn: false };
-  }
-
   const nameIdx = headers.indexOf('name');
   const emailIdx = headers.indexOf('email');
   const companyIdx = headers.indexOf('company');
   const tagsIdx = headers.indexOf('tags');
+
+  if (phoneIdx === -1 || lines.length < 2) {
+    return {
+      rows: [],
+      hasPhoneColumn: phoneIdx >= 0,
+      hasTagsColumn: tagsIdx >= 0,
+      hasCompanyColumn: companyIdx >= 0,
+    };
+  }
 
   const rows: ParsedContactRow[] = [];
 
@@ -90,6 +103,7 @@ export function parseContactCsv(text: string): ParseContactCsvResult {
 
   return {
     rows,
+    hasPhoneColumn: true,
     hasTagsColumn: tagsIdx >= 0,
     hasCompanyColumn: companyIdx >= 0,
   };

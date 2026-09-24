@@ -25,12 +25,23 @@ describe('parseTagCell', () => {
 });
 
 describe('parseContactCsv', () => {
+  it('detects the phone column even when the file has no data rows', () => {
+    expect(parseContactCsv('phone,name').hasPhoneColumn).toBe(true);
+  });
+
+  it('detects a UTF-8 BOM before the phone header', () => {
+    expect(
+      parseContactCsv('\uFEFFphone,name\n+15551234567,Alice').rows
+    ).toHaveLength(1);
+  });
+
   it('parses optional tags column', () => {
     const csv = `phone,name,tags
 +15551234567,Alice,"VIP, Lead"
 +15559876543,Bob,Customer`;
 
     expect(parseContactCsv(csv)).toEqual({
+      hasPhoneColumn: true,
       hasTagsColumn: true,
       hasCompanyColumn: false,
       rows: [
@@ -57,6 +68,7 @@ describe('parseContactCsv', () => {
 +15551234567,Alice`;
 
     expect(parseContactCsv(csv)).toEqual({
+      hasPhoneColumn: true,
       hasTagsColumn: false,
       hasCompanyColumn: false,
       rows: [
@@ -68,6 +80,15 @@ describe('parseContactCsv', () => {
           tagNames: [],
         },
       ],
+    });
+  });
+
+  it('reports when a CSV has no phone header', () => {
+    expect(parseContactCsv('name,email\nAlice,alice@example.com')).toEqual({
+      rows: [],
+      hasPhoneColumn: false,
+      hasTagsColumn: false,
+      hasCompanyColumn: false,
     });
   });
 });

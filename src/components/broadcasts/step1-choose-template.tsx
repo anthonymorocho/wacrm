@@ -26,6 +26,12 @@ export function Step1ChooseTemplate({ selectedTemplate, onSelect, onNext, onBack
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const categoryLabels: Record<string, string> = {
+    marketing: t('chooseTemplate.categoryMarketing'),
+    utility: t('chooseTemplate.categoryUtility'),
+    authentication: t('chooseTemplate.categoryAuthentication'),
+  };
+
   useEffect(() => {
     async function fetchTemplates() {
       try {
@@ -42,7 +48,8 @@ export function Step1ChooseTemplate({ selectedTemplate, onSelect, onNext, onBack
         if (fetchError) throw fetchError;
         setTemplates(data ?? []);
       } catch (err) {
-        setError(err instanceof Error ? err.message : t('chooseTemplate.errorLoad'));
+        console.error('Failed to load broadcast templates:', err);
+        setError(t('chooseTemplate.errorLoad'));
       } finally {
         setLoading(false);
       }
@@ -103,7 +110,8 @@ export function Step1ChooseTemplate({ selectedTemplate, onSelect, onNext, onBack
                   <span
                     className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium ${catColor}`}
                   >
-                    {template.category}
+                    {categoryLabels[template.category.toLowerCase()] ??
+                      template.category}
                   </span>
                 </div>
                 <p className="line-clamp-3 text-xs text-muted-foreground">{template.body_text}</p>

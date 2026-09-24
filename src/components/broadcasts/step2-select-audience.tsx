@@ -1,9 +1,18 @@
 'use client';
 
-import { useEffect, useState, useCallback, useMemo } from 'react';
+import {
+  useEffect,
+  useState,
+  useCallback,
+  useMemo,
+  useRef,
+  type ChangeEvent,
+} from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { CustomField, Tag } from '@/types';
 import { Button } from '@/components/ui/button';
+import { parseContactCsv } from '@/lib/contacts/parse-contact-csv';
+import { isValidE164 } from '@/lib/whatsapp/phone-utils';
 import {
   Users,
   Tags,
@@ -18,6 +27,10 @@ import { useTranslations } from 'next-intl';
 
 type AudienceType = 'all' | 'tags' | 'custom_field' | 'csv';
 type CustomFieldOperator = 'is' | 'is_not' | 'contains';
+type CsvErrorKey =
+  | 'errorCsvMissingPhone'
+  | 'errorCsvInvalidPhones'
+  | 'errorCsvParse';
 
 interface CustomFieldFilter {
   fieldId: string;
@@ -91,6 +104,10 @@ export function Step2SelectAudience({
   const [loadingFields, setLoadingFields] = useState(false);
   const [estimatedCount, setEstimatedCount] = useState<number | null>(null);
   const [loadingCount, setLoadingCount] = useState(false);
+  const [csvFileName, setCsvFileName] = useState<string | null>(null);
+  const [csvError, setCsvError] = useState<CsvErrorKey | null>(null);
+  const [csvLoading, setCsvLoading] = useState(false);
+  const csvInputRef = useRef<HTMLInputElement>(null);
 
   // Tags are used both by the primary "Filter by Tags" audience type
   // AND by the exclude-list below — so always load once on mount.
@@ -238,6 +255,62 @@ export function Step2SelectAudience({
     onUpdate({ ...audience, customField: { ...prev, ...patch } });
   }
 
+  async function handleCsvFileChange(event: ChangeEvent<HTMLInputElement>) {
+    const input = event.currentTarget;
+    const file = input.files?.[0];
+    input.value = '';
+    if (!file) return;
+
+    setCsvLoading(true);
+    setCsvError(null);
+    setCsvFileName(null);
+    onUpdate({ ...audience, csvContacts: undefined });
+
+    try {
+      if (!file.name.toLowerCase().endsWith('.csv')) {
+        setCsvError('errorCsvParse');
+        return;
+      }
+
+      const parsed = parseContactCsv(await file.text());
+      if (!parsed.hasPhoneColumn) {
+        setCsvError('errorCsvMissingPhone');
+        return;
+      }
+      if (parsed.rows.length === 0) {
+        setCsvError('errorCsvParse');
+        return;
+      }
+
+      if (parsed.rows.some(({ phone }) => !isValidE164(phone))) {
+        setCsvError('errorCsvInvalidPhones');
+        return;
+      }
+
+      const contactsByPhone = new Map<
+        string,
+        { phone: string; name?: string }
+      >();
+      for (const { phone, name } of parsed.rows) {
+        if (!contactsByPhone.has(phone)) {
+          contactsByPhone.set(phone, { phone, name });
+        }
+      }
+      const csvContacts = [...contactsByPhone.values()];
+
+      onUpdate({
+        ...audience,
+        type: 'csv',
+        csvContacts,
+      });
+      setCsvFileName(file.name);
+    } catch {
+      setCsvError('errorCsvParse');
+    } finally {
+      setCsvLoading(false);
+    }
+  }
+
   const isValid =
     audience.type === 'all' ||
     (audience.type === 'tags' && audience.tagIds && audience.tagIds.length > 0) ||
@@ -264,7 +337,12 @@ export function Step2SelectAudience({
           return (
             <button
               key={option.type}
-              onClick={() =>
+              disabled={csvLoading}
+              onClick={() => {
+                if (option.type !== 'csv') {
+                  setCsvFileName(null);
+                  setCsvError(null);
+                }
                 onUpdate({
                   ...audience,
                   type: option.type,
@@ -278,7 +356,7 @@ export function Step2SelectAudience({
                   csvContacts:
                     option.type === 'csv' ? audience.csvContacts : undefined,
                 })
-              }
+              }}
               className={`flex items-start gap-3 rounded-xl border p-4 text-left transition-all ${
                 isSelected
                   ? 'border-primary bg-primary/5 ring-1 ring-primary/30'
@@ -391,6 +469,59 @@ export function Step2SelectAudience({
         </div>
       )}
 
+      {audience.type === 'csv' && (
+        <div className="space-y-3 rounded-xl border border-border bg-card/50 p-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="min-w-0">
+              <p className="break-all text-sm font-medium text-foreground">
+                {csvFileName ?? t('selectAudience.uploadCsv')}
+              </p>
+              <p
+                id="broadcast-csv-format"
+                className="mt-1 text-xs text-muted-foreground"
+              >
+                {t('selectAudience.csvFormatDesc')}
+              </p>
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => csvInputRef.current?.click()}
+              disabled={csvLoading}
+              aria-describedby="broadcast-csv-format"
+            >
+              {csvLoading ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Upload className="h-4 w-4" />
+              )}
+              {csvLoading
+                ? t('selectAudience.uploadingCsv')
+                : t('selectAudience.uploadCsv')}
+            </Button>
+            <input
+              ref={csvInputRef}
+              type="file"
+              accept=".csv,text/csv"
+              onChange={handleCsvFileChange}
+              className="hidden"
+            />
+          </div>
+          {csvError ? (
+            <p role="alert" className="text-xs text-destructive">
+              {t(`selectAudience.${csvError}`)}
+            </p>
+          ) : null}
+          {audience.csvContacts?.length ? (
+            <p className="text-xs text-muted-foreground">
+              {t('selectAudience.csvContactsFound', {
+                count: audience.csvContacts.length,
+              })}
+            </p>
+          ) : null}
+        </div>
+      )}
+
       {/* Exclude list — applies regardless of audience type */}
       <div className="rounded-xl border border-border bg-card/50 p-4">
         <div className="mb-3 flex items-center gap-2">
@@ -429,11 +560,15 @@ export function Step2SelectAudience({
 
       {/* Audience Summary */}
       <div className="rounded-xl border border-border bg-card/50 p-4">
-        <p className="mb-2 text-sm font-medium text-foreground">Audience Summary</p>
+        <p className="mb-2 text-sm font-medium text-foreground">
+          {t('selectAudience.summaryTitle')}
+        </p>
         {loadingCount ? (
           <div className="flex items-center gap-2">
             <Loader2 className="h-4 w-4 animate-spin text-primary" />
-            <span className="text-xs text-muted-foreground">Calculating…</span>
+            <span className="text-xs text-muted-foreground">
+              {t('selectAudience.calculating')}
+            </span>
           </div>
         ) : estimatedCount !== null ? (
           <div className="flex items-center gap-2">
@@ -441,11 +576,13 @@ export function Step2SelectAudience({
             <span className="text-sm text-foreground">
               {estimatedCount.toLocaleString()}
             </span>
-            <span className="text-xs text-muted-foreground">estimated recipients</span>
+            <span className="text-xs text-muted-foreground">
+              {t('selectAudience.estimatedRecipients')}
+            </span>
           </div>
         ) : (
           <p className="text-xs text-muted-foreground">
-            Select an audience type to see the estimate.
+            {t('selectAudience.selectTypeToEstimate')}
           </p>
         )}
       </div>
@@ -461,7 +598,7 @@ export function Step2SelectAudience({
         </Button>
         <Button
           onClick={onNext}
-          disabled={!isValid}
+          disabled={!isValid || csvLoading}
           className="bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
         >
           {t('next')}

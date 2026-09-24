@@ -84,6 +84,15 @@ export function Step3Personalize({
     Map<string, string>
   >(new Map());
   const [loadingPreview, setLoadingPreview] = useState(true);
+  const sampleContact = useMemo(
+    () => ({
+      ...SAMPLE_CONTACT,
+      name: t('personalize.sampleName'),
+      email: t('personalize.sampleEmail'),
+      company: t('personalize.sampleCompany'),
+    }),
+    [t],
+  );
 
   // Load user's custom fields + a representative contact for the
   // live preview. Fall back to sample data if no contacts exist yet.
@@ -192,7 +201,7 @@ export function Step3Personalize({
    * possible. Placeholders keyed by "{{N}}" map to variable key "N".
    */
   const previewText = useMemo(() => {
-    const contact = firstContact ?? SAMPLE_CONTACT;
+    const contact = firstContact ?? sampleContact;
     const customValues = firstContact
       ? firstContactCustomValues
       : new Map<string, string>();
@@ -227,6 +236,7 @@ export function Step3Personalize({
     placeholders,
     firstContact,
     firstContactCustomValues,
+    sampleContact,
   ]);
 
   const previewLabel = firstContact
@@ -270,15 +280,15 @@ export function Step3Personalize({
               // eslint-disable-next-line @next/next/no-img-element
               <img
                 src={headerMediaUrl.trim()}
-                alt="Header preview"
+                alt={t('personalize.headerPreviewAlt')}
                 className="mt-3 max-h-40 rounded-lg border border-border object-contain"
               />
             )}
           {headerMediaError && (
             <p className="mt-1.5 text-xs text-amber-300">
               {headerMediaError === 'missing'
-                ? 'A media URL is required to send this template.'
-                : 'Enter a valid http(s) URL.'}
+                ? t('personalize.mediaUrlRequired')
+                : t('personalize.invalidMediaUrl')}
             </p>
           )}
         </div>
@@ -344,7 +354,7 @@ export function Step3Personalize({
                         onChange={(e) =>
                           updateVariable(key, { value: e.target.value })
                         }
-                        placeholder="Enter value..."
+                        placeholder={t('personalize.valuePlaceholder')}
                         className="border-border bg-muted text-foreground placeholder:text-muted-foreground"
                       />
                     ) : mapping.type === 'field' ? (
@@ -376,10 +386,10 @@ export function Step3Personalize({
                           <SelectValue
                             placeholder={
                               loadingFields
-                                ? 'Loading…'
+                                ? t('personalize.loadingCustomFields')
                                 : customFields.length === 0
-                                  ? 'No custom fields'
-                                  : 'Select custom field…'
+                                  ? t('personalize.noCustomFields')
+                                  : t('personalize.selectCustomField')
                             }
                           />
                         </SelectTrigger>
@@ -422,11 +432,9 @@ export function Step3Personalize({
 
       {unmappedKeys.length > 0 && (
         <div className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-300">
-          Map every placeholder before continuing — still missing{' '}
-          <span className="font-mono font-semibold">
-            {unmappedKeys.join(', ')}
-          </span>
-          . Otherwise those placeholders will ship to Meta as empty strings.
+          {t('personalize.missingVariables', {
+            variables: unmappedKeys.join(', '),
+          })}
         </div>
       )}
 

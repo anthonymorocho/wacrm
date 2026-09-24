@@ -1143,6 +1143,32 @@
         "yes": "Yes",
         "no": "No"
       },
+      "stepKinds": {
+        "condition": "Condition",
+        "wait": "Wait",
+        "action": "Action"
+      },
+      "controls": {
+        "moveUp": "Move up",
+        "moveDown": "Move down",
+        "delete": "Delete"
+      },
+      "schedulePlaceholder": "Cron expression or HH:mm",
+      "previews": {
+        "noText": "No text yet",
+        "noBody": "No body yet",
+        "selectTemplate": "Select a template",
+        "noUrl": "No URL",
+        "when": "When: {subject}",
+        "units": {
+          "minute": "minute",
+          "minutes": "minutes",
+          "hour": "hour",
+          "hours": "hours",
+          "day": "day",
+          "days": "days"
+        }
+      },
       "addStep": "Add step",
       "config": {
         "messageText": "Message text",

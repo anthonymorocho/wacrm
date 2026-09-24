@@ -1143,6 +1143,32 @@
         "yes": "예",
         "no": "아니요"
       },
+      "stepKinds": {
+        "condition": "조건",
+        "wait": "대기",
+        "action": "작업"
+      },
+      "controls": {
+        "moveUp": "위로 이동",
+        "moveDown": "아래로 이동",
+        "delete": "삭제"
+      },
+      "schedulePlaceholder": "Cron 표현식 또는 HH:mm",
+      "previews": {
+        "noText": "아직 텍스트가 없습니다",
+        "noBody": "아직 내용이 없습니다",
+        "selectTemplate": "템플릿 선택",
+        "noUrl": "URL 없음",
+        "when": "조건: {subject}",
+        "units": {
+          "minute": "분",
+          "minutes": "분",
+          "hour": "시간",
+          "hours": "시간",
+          "day": "일",
+          "days": "일"
+        }
+      },
       "addStep": "단계 추가",
       "config": {
         "messageText": "메시지 텍스트",

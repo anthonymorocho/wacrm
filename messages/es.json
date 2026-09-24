@@ -305,7 +305,187 @@
   "Automations": {
     "list": { "title": "Automatizaciones", "subtitle": "Crea flujos de trabajo que reaccionen automáticamente a eventos de WhatsApp®.", "create": "Crear automatización", "retry": "Reintentar", "templatesTitle": "Plantillas rápidas", "emptyTitle": "Todavía no hay automatizaciones", "emptyDesc": "Elige una plantilla de arriba o crea una desde cero.", "runs": "{count} ejecución", "runsPlural": "{count} ejecuciones", "lastRun": "última: {time}", "activate": "Activar", "deactivate": "Desactivar", "edit": "Editar", "duplicate": "Duplicar", "viewLogs": "Ver registros", "delete": "Eliminar", "cancel": "Cancelar", "deleteTitle": "Eliminar automatización", "deleteDesc": "Esto eliminará permanentemente {name} y su historial de ejecuciones. No se puede deshacer.", "templateNames": { "welcome_message": { "name": "Mensaje de bienvenida", "description": "Responde automáticamente a los contactos nuevos con un saludo." }, "out_of_office": { "name": "Fuera de horario", "description": "Responde automáticamente fuera del horario para que nadie tenga que esperar." }, "lead_qualifier": { "name": "Calificador de prospectos", "description": "Haz preguntas de calificación para filtrar los prospectos entrantes." }, "follow_up_reminder": { "name": "Recordatorio de seguimiento", "description": "Envía un recordatorio si un contacto no responde en 24 horas." } }, "toasts": { "activated": "Automatización activada", "paused": "Automatización pausada", "duplicated": "Automatización duplicada", "deleted": "Automatización eliminada", "updateError": "No se pudo actualizar", "duplicateError": "No se pudo duplicar", "deleteError": "No se pudo eliminar" } },
     "edit": { "loading": "Cargando...", "loadError": "No se pudo cargar ({status})", "back": "Volver a automatizaciones" },
-    "logs": { "title": "Registros de ejecución", "loadError": "No se pudieron cargar los registros", "emptyTitle": "Todavía no hay ejecuciones", "emptyDesc": "Activa esta automatización para ver sus ejecuciones aquí.", "unknownContact": "Contacto desconocido", "step": "{count} paso", "stepPlural": "{count} pasos", "noSteps": "No se registraron pasos.", "status": { "success": "correcta", "partial": "parcial", "failed": "fallida" }, "back": "Atrás", "backAria": "Volver" }
+    "logs": { "title": "Registros de ejecución", "loadError": "No se pudieron cargar los registros", "emptyTitle": "Todavía no hay ejecuciones", "emptyDesc": "Activa esta automatización para ver sus ejecuciones aquí.", "unknownContact": "Contacto desconocido", "step": "{count} paso", "stepPlural": "{count} pasos", "noSteps": "No se registraron pasos.", "status": { "success": "correcta", "partial": "parcial", "failed": "fallida" }, "back": "Atrás", "backAria": "Volver" },
+    "builder": {
+      "steps": {
+        "send_message": "Enviar mensaje",
+        "send_buttons": "Enviar botones",
+        "send_list": "Enviar lista",
+        "send_template": "Enviar plantilla",
+        "add_tag": "Añadir etiqueta",
+        "remove_tag": "Quitar etiqueta",
+        "assign_conversation": "Asignar conversación",
+        "update_contact_field": "Actualizar campo del contacto",
+        "create_deal": "Crear negocio",
+        "wait": "Esperar",
+        "condition": "Condición (Sí/No)",
+        "send_webhook": "Enviar webhook",
+        "close_conversation": "Cerrar conversación"
+      },
+      "triggers": {
+        "new_message_received": {
+          "label": "Nuevo mensaje recibido",
+          "hint": "Cualquier mensaje entrante"
+        },
+        "first_inbound_message": {
+          "label": "Primer mensaje del contacto",
+          "hint": "La primera vez que este contacto te escribe, incluso si se agregó manualmente"
+        },
+        "keyword_match": {
+          "label": "Coincidencia de palabras clave",
+          "hint": "El mensaje contiene una o más palabras clave específicas"
+        },
+        "interactive_reply": {
+          "label": "Respuesta de botón o lista",
+          "hint": "El cliente toca un botón o una fila de lista con el ID indicado; puedes enlazar menús entre automatizaciones"
+        },
+        "new_contact_created": {
+          "label": "Nuevo contacto creado",
+          "hint": "Cuando se crea automáticamente un contacto a partir de un mensaje entrante"
+        },
+        "conversation_assigned": {
+          "label": "Conversación asignada",
+          "hint": "Cuando se asigna a un agente"
+        },
+        "tag_added": {
+          "label": "Etiqueta añadida",
+          "hint": "Cuando se añade una etiqueta a un contacto"
+        },
+        "time_based": {
+          "label": "Basada en horario",
+          "hint": "Según un horario recurrente"
+        }
+      },
+      "trigger": "Disparador",
+      "triggerType": "Tipo de disparador",
+      "keywords": "Palabras clave",
+      "keywordsHint": "Lista separada por comas (p. ej., hola, ayuda, comprar)",
+      "replyIds": "IDs de respuesta",
+      "replyIdsHint": "yes, no, more_info",
+      "replyIdsHelp": "Escribe separados por comas los IDs exactos de los botones o filas de lista. Usa los mismos IDs que configuraste en un paso de enviar botones o enviar lista.",
+      "schedule": "Horario",
+      "scheduleHint": "Expresión cron (p. ej., 0 9 * * 1-5)",
+      "active": "Activa",
+      "activeAria": "Activa",
+      "save": "Guardar",
+      "saveDraft": "Guardar borrador",
+      "untitled": "Automatización sin título",
+      "backToAutomations": "Volver a automatizaciones",
+      "toasts": {
+        "saved": "Automatización guardada",
+        "created": "Automatización creada",
+        "saveFailed": "No se pudo guardar"
+      },
+      "tags": {
+        "select": "Selecciona una etiqueta…",
+        "placeholder": "ID de la etiqueta",
+        "unknown": "{id} (etiqueta desconocida)"
+      },
+      "fields": {
+        "name": "Nombre",
+        "email": "Correo electrónico",
+        "company": "Empresa",
+        "customFields": "Campos personalizados",
+        "unknown": "{id} (campo desconocido)"
+      },
+      "agents": {
+        "select": "Selecciona un agente…",
+        "placeholder": "ID del agente",
+        "unknown": "{id} (agente desconocido)"
+      },
+      "pipelines": {
+        "pipelineLabel": "Embudo",
+        "pipelineIdLabel": "ID del embudo",
+        "stageLabel": "Etapa",
+        "stageIdLabel": "ID de la etapa",
+        "selectPipeline": "Selecciona un embudo…",
+        "selectStage": "Selecciona una etapa…",
+        "selectPipelineFirst": "Selecciona primero un embudo…",
+        "unknownPipeline": "{id} (embudo desconocido)",
+        "unknownStage": "{id} (etapa desconocida)"
+      },
+      "templates": {
+        "templateLabel": "Plantilla",
+        "templateNameLabel": "Nombre de la plantilla",
+        "languageLabel": "Idioma",
+        "select": "Selecciona una plantilla…",
+        "unknown": "{name} ({lang}) — no está en la lista aprobada",
+        "unknownLang": "desconocido"
+      },
+      "branches": {
+        "yes": "Sí",
+        "no": "No"
+      },
+      "stepKinds": {
+        "condition": "Condición",
+        "wait": "Espera",
+        "action": "Acción"
+      },
+      "controls": {
+        "moveUp": "Subir",
+        "moveDown": "Bajar",
+        "delete": "Eliminar"
+      },
+      "schedulePlaceholder": "Expresión cron o HH:mm",
+      "previews": {
+        "noText": "Aún no hay texto",
+        "noBody": "Aún no hay contenido",
+        "selectTemplate": "Selecciona una plantilla",
+        "noUrl": "Falta la URL",
+        "when": "Cuando: {subject}",
+        "units": {
+          "minute": "minuto",
+          "minutes": "minutos",
+          "hour": "hora",
+          "hours": "horas",
+          "day": "día",
+          "days": "días"
+        }
+      },
+      "addStep": "Añadir paso",
+      "config": {
+        "messageText": "Texto del mensaje",
+        "placeholderMessageText": "¡Hola! Gracias por escribirnos…",
+        "tagLabel": "Etiqueta",
+        "modeLabel": "Modo",
+        "modes": {
+          "round_robin": "Rotación automática",
+          "specific": "Agente específico"
+        },
+        "agentLabel": "Agente",
+        "fieldLabel": "Campo",
+        "valueLabel": "Valor",
+        "placeholderValue": "Texto o {{ vars.x }} / {{ message.text }}",
+        "titleLabel": "Título",
+        "amountLabel": "Cantidad",
+        "unitLabel": "Unidad",
+        "units": {
+          "minutes": "Minutos",
+          "hours": "Horas",
+          "days": "Días"
+        },
+        "subjectLabel": "Criterio",
+        "subjects": {
+          "tag_presence": "Presencia de etiqueta",
+          "contact_field": "Campo del contacto",
+          "message_content": "Contenido del mensaje",
+          "time_of_day": "Hora del día"
+        },
+        "operandLabel": "Valor a comparar",
+        "placeholderTime": "HH:mm-HH:mm",
+        "placeholderContact": "nombre / correo / empresa",
+        "placeholderTag": "ID de la etiqueta",
+        "urlLabel": "URL",
+        "headersLabel": "Encabezados",
+        "placeholderHeaders": "{\"Authorization\": \"Bearer ...\"}",
+        "bodyTemplateLabel": "Plantilla del cuerpo",
+        "placeholderBody": "{\"id\": \"{{ contact.id }}\"}",
+        "matchType": "Tipo de coincidencia",
+        "matchContains": "Contiene",
+        "matchExact": "Coincidencia exacta",
+        "closeConversationHint": "Cambia el estado de la conversación a «cerrada». No requiere configuración adicional."
+      }
+    }
   },
   "Flows": {
     "list": { "title": "Flujos", "beta": "BETA", "description": "Crea conversaciones de WhatsApp con ramificaciones y botones. Útil para menús, preguntas frecuentes y clasificación antes de que intervenga un agente.", "newFlow": "Nuevo flujo", "statusDraft": "Borrador", "statusActive": "Activo", "statusArchived": "Archivado", "loadError": "No se pudieron cargar los flujos", "createError": "No se pudo crear el flujo", "cloneError": "No se pudo clonar el flujo", "deleteConfirm": "¿Eliminar este flujo?", "deleteSuccess": "Flujo eliminado", "deleteError": "No se pudo eliminar el flujo", "emptyTitle": "Todavía no hay flujos", "emptyDesc": "Crea tu primera conversación: un menú de bienvenida, consulta de pedidos o bot de preguntas frecuentes.", "createFirst": "Crea tu primer flujo", "createTitle": "Crear flujo", "createDesc": "Empieza desde una plantilla o desde cero.", "startTemplate": "Empezar con plantilla", "nodeCount": "{count} nodos", "startBlank": "Empezar en blanco", "placeholderName": "Nombre del flujo", "cancel": "Cancelar", "createBlank": "Crear flujo", "runCount": "{count} ejecuciones", "edit": "Editar", "delete": "Eliminar", "triggerKeywordNone": "Sin palabra clave", "triggerKeyword": "Palabra clave", "triggerFirstInbound": "Primer mensaje entrante", "triggerManual": "Manual" },

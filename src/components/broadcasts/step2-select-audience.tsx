@@ -10,6 +10,13 @@ import {
 } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { CustomField, Tag } from '@/types';
+import type {
+  AudienceConfig,
+  AudienceType,
+  CustomFieldFilter,
+  CsvBroadcastContact,
+  CustomFieldOperator,
+} from '@/types/broadcast';
 import { Button } from '@/components/ui/button';
 import { parseContactCsv } from '@/lib/contacts/parse-contact-csv';
 import { isValidE164 } from '@/lib/whatsapp/phone-utils';
@@ -26,27 +33,11 @@ import {
 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
-type AudienceType = 'all' | 'tags' | 'custom_field' | 'csv';
-type CustomFieldOperator = 'is' | 'is_not' | 'contains';
 type CsvErrorKey =
   | 'errorCsvMissingPhone'
   | 'errorCsvInvalidPhones'
   | 'errorCsvNoContacts'
   | 'errorCsvParse';
-
-interface CustomFieldFilter {
-  fieldId: string;
-  operator: CustomFieldOperator;
-  value: string;
-}
-
-interface AudienceConfig {
-  type: AudienceType;
-  tagIds?: string[];
-  customField?: CustomFieldFilter;
-  csvContacts?: { phone: string; name?: string }[];
-  excludeTagIds?: string[];
-}
 
 interface Step2Props {
   audience: AudienceConfig;
@@ -63,14 +54,19 @@ export function Step2SelectAudience({
 }: Step2Props) {
   const t = useTranslations('Broadcasts.wizard');
 
-  const OPERATOR_OPTIONS = useMemo<{ value: CustomFieldOperator; label: string }[]>(() => [
-    { value: 'is', label: t('selectAudience.operatorIs') },
-    { value: 'is_not', label: t('selectAudience.operatorIsNot') },
-    { value: 'contains', label: t('selectAudience.operatorContains') },
-  ], [t]);
+  const OPERATOR_OPTIONS = useMemo<
+    { value: CustomFieldOperator; label: string }[]
+  >(
+    () => [
+      { value: 'is', label: t('selectAudience.operatorIs') },
+      { value: 'is_not', label: t('selectAudience.operatorIsNot') },
+      { value: 'contains', label: t('selectAudience.operatorContains') },
+    ],
+    [t],
+  );
 
   const audienceOptions = useMemo<{
-    type: AudienceType;
+    type: AudienceConfig['type'];
     label: string;
     description: string;
     icon: typeof Users;
@@ -251,7 +247,7 @@ export function Step2SelectAudience({
   function updateCustomField(patch: Partial<CustomFieldFilter>) {
     const prev = audience.customField ?? {
       fieldId: '',
-      operator: 'is' as CustomFieldOperator,
+      operator: 'is' as NonNullable<AudienceConfig['customField']>['operator'],
       value: '',
     };
     onUpdate({ ...audience, customField: { ...prev, ...patch } });
@@ -266,7 +262,7 @@ export function Step2SelectAudience({
     setCsvLoading(true);
     setCsvError(null);
     setCsvFileName(null);
-    onUpdate({ ...audience, csvContacts: undefined });
+    onUpdate({ ...audience, csvContacts: undefined, csvColumns: undefined });
 
     try {
       if (!file.name.toLowerCase().endsWith('.csv')) {
@@ -274,7 +270,9 @@ export function Step2SelectAudience({
         return;
       }
 
-      const parsed = parseContactCsv(await file.text());
+      const parsed = parseContactCsv(await file.text(), {
+        includeColumnValues: true,
+      });
       if (!parsed.hasPhoneColumn) {
         setCsvError('errorCsvMissingPhone');
         return;
@@ -289,13 +287,10 @@ export function Step2SelectAudience({
         return;
       }
 
-      const contactsByPhone = new Map<
-        string,
-        { phone: string; name?: string }
-      >();
-      for (const { phone, name } of parsed.rows) {
+      const contactsByPhone = new Map<string, CsvBroadcastContact>();
+      for (const { phone, name, columnValues } of parsed.rows) {
         if (!contactsByPhone.has(phone)) {
-          contactsByPhone.set(phone, { phone, name });
+          contactsByPhone.set(phone, { phone, name, columnValues: columnValues ?? {} });
         }
       }
       const csvContacts = [...contactsByPhone.values()];
@@ -304,6 +299,7 @@ export function Step2SelectAudience({
         ...audience,
         type: 'csv',
         csvContacts,
+        csvColumns: parsed.columnNames ?? [],
       });
       setCsvFileName(file.name);
     } catch {
@@ -314,7 +310,7 @@ export function Step2SelectAudience({
   }
 
   function downloadCsvTemplate() {
-    const blob = new Blob(['\uFEFFphone,name\r\n'], {
+    const blob = new Blob(['\uFEFFphone,name,custom_column_1\r\n'], {
       type: 'text/csv;charset=utf-8;',
     });
     const url = URL.createObjectURL(blob);
@@ -371,6 +367,8 @@ export function Step2SelectAudience({
                       : undefined,
                   csvContacts:
                     option.type === 'csv' ? audience.csvContacts : undefined,
+                  csvColumns:
+                    option.type === 'csv' ? audience.csvColumns : undefined,
                 })
               }}
               className={`flex items-start gap-3 rounded-xl border p-4 text-left transition-all ${

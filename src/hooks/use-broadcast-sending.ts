@@ -4,35 +4,12 @@ import { useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { useAuth } from '@/hooks/use-auth';
 import { Contact, MessageTemplate } from '@/types';
-
-export type CustomFieldOperator = 'is' | 'is_not' | 'contains';
-
-export interface CustomFieldFilter {
-  fieldId: string;
-  operator: CustomFieldOperator;
-  value: string;
-}
-
-export interface AudienceConfig {
-  type: 'all' | 'tags' | 'custom_field' | 'csv';
-  tagIds?: string[];
-  customField?: CustomFieldFilter;
-  csvContacts?: { phone: string; name?: string }[];
-  /** Contacts carrying any of these tags are subtracted from the result. */
-  excludeTagIds?: string[];
-}
-
-/**
- * Variable mapping — each template placeholder (by key, usually "1",
- * "2", …) is resolved at send time. `field` maps to a built-in contact
- * field (name/phone/email/company); `custom_field` maps to a
- * contact_custom_values.value row keyed by the custom_fields.id stored
- * in `value`.
- */
-export type VariableMapping =
-  | { type: 'static'; value: string }
-  | { type: 'field'; value: string }
-  | { type: 'custom_field'; value: string };
+import type {
+  AudienceConfig,
+  CustomFieldFilter,
+  CsvBroadcastContact,
+  VariableMapping,
+} from '@/types/broadcast';
 
 interface BroadcastPayload {
   name: string;
@@ -88,6 +65,7 @@ export function resolveVariables(
   variables: Record<string, VariableMapping>,
   contact: Contact,
   customValues?: Map<string, string>,
+  csvColumnValues?: Record<string, string>,
 ): string[] {
   // Keys are typically "1","2",... — numeric-aware sort keeps
   // {{1}} before {{10}}.
@@ -111,6 +89,8 @@ export function resolveVariables(
       };
       return fieldMap[v.value] ?? '';
     }
+
+    if (v.type === 'csv_column') return csvColumnValues?.[v.value] ?? '';
 
     // custom_field
     return customValues?.get(v.value) ?? '';
@@ -218,7 +198,7 @@ export function useBroadcastSending(): UseBroadcastSendingReturn {
    */
   async function upsertCsvContacts(
     supabase: ReturnType<typeof createClient>,
-    csvRows: { phone: string; name?: string }[],
+    csvRows: Pick<CsvBroadcastContact, 'phone' | 'name'>[],
   ): Promise<Contact[]> {
     if (csvRows.length === 0) return [];
 
@@ -438,6 +418,11 @@ export function useBroadcastSending(): UseBroadcastSendingReturn {
         contactIds,
       );
 
+      const csvColumnValuesByPhone = new Map<string, Record<string, string>>(
+        (payload.audience.type === 'csv' ? payload.audience.csvContacts ?? [] : [])
+          .map(({ phone, columnValues }) => [phone, columnValues]),
+      );
+
       let failedCount = 0;
       const totalRecipients = recipients.length;
 
@@ -466,6 +451,9 @@ export function useBroadcastSending(): UseBroadcastSendingReturn {
                   payload.variables,
                   r.contact,
                   customValueIndex.get(r.contact.id),
+                  r.contact.phone
+                    ? csvColumnValuesByPhone.get(r.contact.phone)
+                    : undefined,
                 )
               : [],
             ...(messageParams ? { messageParams } : {}),

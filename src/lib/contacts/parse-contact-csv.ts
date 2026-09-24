@@ -8,8 +8,15 @@ export interface ParsedContactRow {
   name?: string;
   email?: string;
   company?: string;
+  /** Included only when parsing campaign CSVs with includeColumnValues. */
+  columnValues?: Record<string, string>;
   /** Tag names from the optional `tags` column (comma/semicolon separated). */
   tagNames: string[];
+}
+
+export interface ParseContactCsvOptions {
+  /** Preserve all columns for mapping campaign template variables. */
+  includeColumnValues?: boolean;
 }
 
 /** Split a CSV cell into unique tag names (case-insensitive de-dupe). */
@@ -33,6 +40,8 @@ export function parseTagCell(value: string | undefined): string[] {
 
 export interface ParseContactCsvResult {
   rows: ParsedContactRow[];
+  /** Original CSV headers, when includeColumnValues is enabled. */
+  columnNames?: string[];
   /** True when the CSV header includes a `phone` column. */
   hasPhoneColumn: boolean;
   /** True when the CSV header includes a `tags` column. */
@@ -41,11 +50,15 @@ export interface ParseContactCsvResult {
   hasCompanyColumn: boolean;
 }
 
-export function parseContactCsv(text: string): ParseContactCsvResult {
+export function parseContactCsv(
+  text: string,
+  options: ParseContactCsvOptions = {},
+): ParseContactCsvResult {
   const content = text.replace(/^\uFEFF/, '').trim();
   if (!content) {
     return {
       rows: [],
+      ...(options.includeColumnValues ? { columnNames: [] } : {}),
       hasPhoneColumn: false,
       hasTagsColumn: false,
       hasCompanyColumn: false,
@@ -53,9 +66,19 @@ export function parseContactCsv(text: string): ParseContactCsvResult {
   }
   const lines = content.split(/\r?\n/);
 
-  const headers = lines[0]
-    .split(',')
-    .map((h) => h.trim().toLowerCase().replace(/["']/g, ''));
+  const headerCells = parseCsvLine(lines[0]).map((header) =>
+    header.trim().replace(/^['"]|['"]$/g, ''),
+  );
+  const headers = headerCells.map((header) => header.toLowerCase());
+  const seenColumnNames = new Set<string>();
+  const columnNames: string[] = [];
+  for (const header of headerCells) {
+    const normalizedHeader = header.toLowerCase();
+    if (header && !seenColumnNames.has(normalizedHeader)) {
+      seenColumnNames.add(normalizedHeader);
+      columnNames.push(header);
+    }
+  }
 
   const phoneIdx = headers.indexOf('phone');
   const nameIdx = headers.indexOf('name');
@@ -66,6 +89,7 @@ export function parseContactCsv(text: string): ParseContactCsvResult {
   if (phoneIdx === -1 || lines.length < 2) {
     return {
       rows: [],
+      ...(options.includeColumnValues ? { columnNames } : {}),
       hasPhoneColumn: phoneIdx >= 0,
       hasTagsColumn: tagsIdx >= 0,
       hasCompanyColumn: companyIdx >= 0,
@@ -82,7 +106,7 @@ export function parseContactCsv(text: string): ParseContactCsvResult {
     const phone = values[phoneIdx]?.replace(/["']/g, '').trim();
     if (!phone) continue;
 
-    rows.push({
+    const row: ParsedContactRow = {
       phone,
       name:
         nameIdx >= 0
@@ -98,11 +122,31 @@ export function parseContactCsv(text: string): ParseContactCsvResult {
           : undefined,
       tagNames:
         tagsIdx >= 0 ? parseTagCell(values[tagsIdx]?.replace(/["']/g, '')) : [],
-    });
+    };
+
+    if (options.includeColumnValues) {
+      const columnValueEntries: [string, string][] = [];
+      const seenColumns = new Set<string>();
+      for (let columnIdx = 0; columnIdx < headerCells.length; columnIdx++) {
+        const columnName = headerCells[columnIdx];
+        const normalizedColumn = columnName.toLowerCase();
+        if (columnName && !seenColumns.has(normalizedColumn)) {
+          seenColumns.add(normalizedColumn);
+          columnValueEntries.push([
+            columnName,
+            values[columnIdx]?.trim() ?? '',
+          ]);
+        }
+      }
+      row.columnValues = Object.fromEntries(columnValueEntries);
+    }
+
+    rows.push(row);
   }
 
   return {
     rows,
+    ...(options.includeColumnValues ? { columnNames } : {}),
     hasPhoneColumn: true,
     hasTagsColumn: tagsIdx >= 0,
     hasCompanyColumn: companyIdx >= 0,

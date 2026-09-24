@@ -14,18 +14,14 @@ import {
 } from '@/components/ui/select';
 import { ArrowLeft, ArrowRight, Eye, ImageIcon, Loader2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
-
-type VariableType = 'static' | 'field' | 'custom_field';
-
-interface VariableMapping {
-  type: VariableType;
-  value: string;
-}
+import type { VariableMapping } from '@/types/broadcast';
 
 interface Step3Props {
   template: MessageTemplate;
   variables: Record<string, VariableMapping>;
   onUpdate: (variables: Record<string, VariableMapping>) => void;
+  csvColumns: string[];
+  csvSampleValues?: Record<string, string>;
   /** Media URL for an IMAGE/VIDEO/DOCUMENT header, when the template has one. */
   headerMediaUrl: string;
   onHeaderMediaUrlChange: (url: string) => void;
@@ -47,6 +43,15 @@ function isValidHttpUrl(value: string): boolean {
   } catch {
     return false;
   }
+}
+
+function getCsvPreviewValue(
+  values: Record<string, string> | undefined,
+  columnName: string,
+): string | undefined {
+  return Object.entries(values ?? {}).find(
+    ([header]) => header.trim().toLowerCase() === columnName,
+  )?.[1];
 }
 
 const contactFields = [
@@ -71,6 +76,8 @@ export function Step3Personalize({
   template,
   variables,
   onUpdate,
+  csvColumns,
+  csvSampleValues,
   headerMediaUrl,
   onHeaderMediaUrlChange,
   onNext,
@@ -181,15 +188,22 @@ export function Step3Personalize({
     for (const placeholder of placeholders) {
       const key = placeholder.replace(/^\{\{|\}\}$/g, '');
       const mapping = variables[key];
-      if (!mapping || !mapping.value?.trim()) {
+      if (
+        !mapping ||
+        !mapping.value?.trim() ||
+        (mapping.type === 'csv_column' && !csvColumns.includes(mapping.value))
+      ) {
         missing.push(placeholder);
       }
     }
     return missing;
-  }, [placeholders, variables]);
+  }, [placeholders, variables, csvColumns]);
 
   function updateVariable(key: string, patch: Partial<VariableMapping>) {
-    const current = variables[key] ?? { type: 'static' as VariableType, value: '' };
+    const current = variables[key] ?? {
+      type: 'static' as VariableMapping['type'],
+      value: '',
+    };
     onUpdate({
       ...variables,
       [key]: { ...current, ...patch },
@@ -217,14 +231,20 @@ export function Step3Personalize({
           replacement = mapping.value;
         } else if (mapping.type === 'field' && mapping.value) {
           const fieldMap: Record<string, string | undefined> = {
-            name: contact.name,
-            phone: contact.phone ?? undefined,
-            email: contact.email,
-            company: contact.company,
+            name: getCsvPreviewValue(csvSampleValues, 'name') ?? contact.name,
+            phone:
+              getCsvPreviewValue(csvSampleValues, 'phone') ??
+              contact.phone ??
+              undefined,
+            email: getCsvPreviewValue(csvSampleValues, 'email') ?? contact.email,
+            company:
+              getCsvPreviewValue(csvSampleValues, 'company') ?? contact.company,
           };
           replacement = fieldMap[mapping.value] ?? placeholder;
         } else if (mapping.type === 'custom_field' && mapping.value) {
           replacement = customValues.get(mapping.value) || placeholder;
+        } else if (mapping.type === 'csv_column' && mapping.value) {
+          replacement = csvSampleValues?.[mapping.value] || placeholder;
         }
       }
       text = text.replaceAll(placeholder, replacement);
@@ -237,11 +257,14 @@ export function Step3Personalize({
     firstContact,
     firstContactCustomValues,
     sampleContact,
+    csvSampleValues,
   ]);
 
-  const previewLabel = firstContact
-    ? firstContact.name || firstContact.phone
-    : t('personalize.previewSample');
+  const previewLabel = csvColumns.length > 0
+    ? t('personalize.previewCsvSample')
+    : firstContact
+      ? firstContact.name || firstContact.phone
+      : t('personalize.previewSample');
 
   return (
     <div className="space-y-6">
@@ -326,7 +349,7 @@ export function Step3Personalize({
                       value={mapping.type}
                       onValueChange={(val) =>
                         updateVariable(key, {
-                          type: val as VariableType,
+                          type: val as VariableMapping['type'],
                           value: '',
                         })
                       }
@@ -340,13 +363,22 @@ export function Step3Personalize({
                         <SelectItem value="custom_field">
                           {t('personalize.typeCustom')}
                         </SelectItem>
+                        {csvColumns.length > 0 && (
+                          <SelectItem value="csv_column">
+                            {t('personalize.typeCsvColumn')}
+                          </SelectItem>
+                        )}
                       </SelectContent>
                     </Select>
                   </div>
 
                   <div>
                     <label className="mb-1.5 block text-xs font-medium text-muted-foreground">
-                      {mapping.type === 'static' ? t('personalize.staticValue') : t('personalize.contactField')}
+                      {mapping.type === 'static'
+                        ? t('personalize.staticValue')
+                        : mapping.type === 'csv_column'
+                          ? t('personalize.csvColumn')
+                          : t('personalize.contactField')}
                     </label>
                     {mapping.type === 'static' ? (
                       <Input
@@ -371,6 +403,24 @@ export function Step3Personalize({
                           {contactFields.map((field) => (
                             <SelectItem key={field.value} value={field.value}>
                               {t(`personalize.fieldMap.${field.labelKey}`)}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    ) : mapping.type === 'csv_column' ? (
+                      <Select
+                        value={mapping.value || undefined}
+                        onValueChange={(val) =>
+                          updateVariable(key, { value: val || '' })
+                        }
+                      >
+                        <SelectTrigger className="w-full border-border bg-muted text-foreground">
+                          <SelectValue placeholder={t('personalize.selectCsvColumn')} />
+                        </SelectTrigger>
+                        <SelectContent className="border-border bg-popover">
+                          {csvColumns.map((column) => (
+                            <SelectItem key={column} value={column}>
+                              {column}
                             </SelectItem>
                           ))}
                         </SelectContent>

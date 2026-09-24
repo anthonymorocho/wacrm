@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/client';
 import { useAuth } from '@/hooks/use-auth';
 import { toast } from 'sonner';
 import { MessageTemplate } from '@/types';
+import type { AudienceConfig, VariableMapping } from '@/types/broadcast';
 import { Step1ChooseTemplate } from '@/components/broadcasts/step1-choose-template';
 import { Step2SelectAudience } from '@/components/broadcasts/step2-select-audience';
 import { Step3Personalize } from '@/components/broadcasts/step3-personalize';
@@ -29,20 +30,8 @@ export default function NewBroadcastPage() {
 
   const [currentStep, setCurrentStep] = useState(0);
   const [template, setTemplate] = useState<MessageTemplate | null>(null);
-  const [audience, setAudience] = useState<{
-    type: 'all' | 'tags' | 'custom_field' | 'csv';
-    tagIds?: string[];
-    customField?: {
-      fieldId: string;
-      operator: 'is' | 'is_not' | 'contains';
-      value: string;
-    };
-    csvContacts?: { phone: string; name?: string }[];
-    excludeTagIds?: string[];
-  }>({ type: 'all' });
-  const [variables, setVariables] = useState<
-    Record<string, { type: 'static' | 'field' | 'custom_field'; value: string }>
-  >({});
+  const [audience, setAudience] = useState<AudienceConfig>({ type: 'all' });
+  const [variables, setVariables] = useState<Record<string, VariableMapping>>({});
   const [headerMediaUrl, setHeaderMediaUrl] = useState('');
   const [name, setName] = useState('');
 
@@ -58,6 +47,7 @@ export default function NewBroadcastPage() {
           tagIds: audience.tagIds,
           customField: audience.customField,
           csvContacts: audience.csvContacts,
+          csvColumns: audience.csvColumns,
           excludeTagIds: audience.excludeTagIds,
         },
         variables,
@@ -199,7 +189,18 @@ export default function NewBroadcastPage() {
           {currentStep === 1 && (
             <Step2SelectAudience
               audience={audience}
-              onUpdate={setAudience}
+              onUpdate={(nextAudience) => {
+                setAudience(nextAudience);
+                if (nextAudience.type !== 'csv') {
+                  setVariables((current) =>
+                    Object.fromEntries(
+                      Object.entries(current).filter(
+                        ([, mapping]) => mapping.type !== 'csv_column',
+                      ),
+                    ),
+                  );
+                }
+              }}
               onNext={() => setCurrentStep(2)}
               onBack={() => setCurrentStep(0)}
             />
@@ -209,6 +210,12 @@ export default function NewBroadcastPage() {
               template={template}
               variables={variables}
               onUpdate={setVariables}
+              csvColumns={audience.type === 'csv' ? audience.csvColumns ?? [] : []}
+              csvSampleValues={
+                audience.type === 'csv'
+                  ? audience.csvContacts?.[0]?.columnValues
+                  : undefined
+              }
               headerMediaUrl={headerMediaUrl}
               onHeaderMediaUrlChange={setHeaderMediaUrl}
               onNext={() => setCurrentStep(3)}

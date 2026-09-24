@@ -46,11 +46,14 @@ interface PublicChannel {
 
 interface ZernioConnection {
   id: string;
-  page_id: string;
-  page_name: string | null;
+  provider: ZernioProvider;
+  display_name: string | null;
   status: 'connected' | 'disconnected';
   connected_at: string | null;
 }
+
+type ZernioProvider = 'facebook' | 'instagram';
+const ZERNIO_PROVIDERS: ZernioProvider[] = ['facebook', 'instagram'];
 
 interface ZernioCredentialsForm {
   apiKey: string;
@@ -105,15 +108,17 @@ export function MetaChannelsConfig() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState<MetaChannelProvider | null>(null);
   const [removing, setRemoving] = useState<MetaChannelProvider | null>(null);
-  const [removeTarget, setRemoveTarget] =
-    useState<MetaChannelProvider | null>(null);
+  const [removeTarget, setRemoveTarget] = useState<MetaChannelProvider | null>(
+    null
+  );
   const [copied, setCopied] = useState(false);
   const [zernio, setZernio] = useState<{
     configured: boolean;
-    connection: ZernioConnection | null;
+    connections: Record<ZernioProvider, ZernioConnection | null>;
   } | null>(null);
   const [zernioLoading, setZernioLoading] = useState(true);
-  const [zernioConnecting, setZernioConnecting] = useState(false);
+  const [zernioConnecting, setZernioConnecting] =
+    useState<ZernioProvider | null>(null);
   const [zernioSaving, setZernioSaving] = useState(false);
   const [zernioCredentials, setZernioCredentials] = useState(
     emptyZernioCredentials
@@ -192,7 +197,18 @@ export function MetaChannelsConfig() {
         if (!cancelled) {
           setZernio({
             configured: body.configured === true,
-            connection: body.connection ?? null,
+            connections: {
+              facebook:
+                body.connections?.find(
+                  (connection: ZernioConnection) =>
+                    connection.provider === 'facebook'
+                ) ?? null,
+              instagram:
+                body.connections?.find(
+                  (connection: ZernioConnection) =>
+                    connection.provider === 'instagram'
+                ) ?? null,
+            },
           });
         }
       } catch (error) {
@@ -305,11 +321,11 @@ export function MetaChannelsConfig() {
     }
   }
 
-  async function connectZernio() {
+  async function connectZernio(provider: ZernioProvider) {
     if (!canEditSettings) return;
-    setZernioConnecting(true);
+    setZernioConnecting(provider);
     try {
-      const response = await fetch('/api/zernio/connect', {
+      const response = await fetch(`/api/zernio/connect?platform=${provider}`, {
         cache: 'no-store',
       });
       const body = await response.json();
@@ -318,7 +334,7 @@ export function MetaChannelsConfig() {
       }
       window.location.assign(body.auth_url);
     } catch (error) {
-      setZernioConnecting(false);
+      setZernioConnecting(null);
       toast.error(
         error instanceof Error ? error.message : tz('zernioConnectFailed')
       );
@@ -351,7 +367,10 @@ export function MetaChannelsConfig() {
 
       setZernio((current) => ({
         configured: true,
-        connection: current?.connection ?? null,
+        connections: current?.connections ?? {
+          facebook: null,
+          instagram: null,
+        },
       }));
       // Do not retain private credentials in React state after saving.
       setZernioCredentials(emptyZernioCredentials());
@@ -390,13 +409,6 @@ export function MetaChannelsConfig() {
           <CardTitle className="text-foreground flex items-center gap-2">
             <Link2 className="text-primary size-4" />
             {tz('zernioTitle')}
-            {zernio?.connection ? (
-              <span className="text-primary ml-auto text-xs font-normal">
-                {zernio.connection.status === 'connected'
-                  ? t('configured')
-                  : t('disconnected')}
-              </span>
-            ) : null}
           </CardTitle>
           <CardDescription className="text-muted-foreground">
             {tz('zernioDescription')}
@@ -468,49 +480,66 @@ export function MetaChannelsConfig() {
             <p className="text-muted-foreground flex items-center gap-2 text-sm">
               <Loader2 className="size-4 animate-spin" /> {tz('zernioLoading')}
             </p>
-          ) : zernio?.connection ? (
-            <div className="text-muted-foreground text-sm">
-              <div className="text-foreground font-medium">
-                {zernio.connection.page_name || tz('zernioFacebookPage')}
-              </div>
-              <div className="font-mono text-xs">
-                {zernio.connection.page_id}
-              </div>
-            </div>
-          ) : (
+          ) : !zernio?.configured ? (
             <p className="text-muted-foreground text-sm">
-              {zernio?.configured
-                ? tz('zernioNotConnected')
-                : tz('zernioNotConfigured')}
+              {tz('zernioNotConfigured')}
             </p>
-          )}
+          ) : null}
           <p className="text-muted-foreground text-xs leading-relaxed">
             {tz('zernioSelectorHint')}
           </p>
           {!canEditSettings ? (
             <p className="text-muted-foreground text-xs">{t('adminOnly')}</p>
           ) : null}
-          <Button
-            type="button"
-            onClick={() => void connectZernio()}
-            disabled={
-              profileLoading ||
-              zernioLoading ||
-              zernioConnecting ||
-              zernioSaving ||
-              !zernio?.configured ||
-              !canEditSettings
-            }
-          >
-            {zernioConnecting ? (
-              <Loader2 className="size-4 animate-spin" />
-            ) : null}
-            {zernioConnecting
-              ? tz('zernioConnecting')
-              : zernio?.connection
-                ? tz('zernioReconnect')
-                : tz('zernioConnect')}
-          </Button>
+          {ZERNIO_PROVIDERS.map((provider) => {
+            const connection = zernio?.connections[provider];
+            const providerName = tz(
+              provider === 'facebook' ? 'zernioFacebook' : 'zernioInstagram'
+            );
+            return (
+              <div
+                key={provider}
+                className="border-border space-y-2 rounded-lg border p-3"
+              >
+                <div className="flex items-center justify-between gap-3 text-sm">
+                  <span className="text-foreground font-medium">
+                    {providerName}
+                  </span>
+                  <span className="text-muted-foreground">
+                    {connection?.status === 'connected'
+                      ? tz('zernioConnected')
+                      : t('disconnected')}
+                  </span>
+                </div>
+                {connection?.display_name ? (
+                  <p className="text-muted-foreground text-sm">
+                    {connection.display_name}
+                  </p>
+                ) : null}
+                <Button
+                  type="button"
+                  onClick={() => void connectZernio(provider)}
+                  disabled={
+                    profileLoading ||
+                    zernioLoading ||
+                    zernioConnecting !== null ||
+                    zernioSaving ||
+                    !zernio?.configured ||
+                    !canEditSettings
+                  }
+                >
+                  {zernioConnecting === provider ? (
+                    <Loader2 className="size-4 animate-spin" />
+                  ) : null}
+                  {zernioConnecting === provider
+                    ? tz('zernioConnecting')
+                    : tz(connection ? 'zernioReconnect' : 'zernioConnect', {
+                        provider: providerName,
+                      })}
+                </Button>
+              </div>
+            );
+          })}
         </CardContent>
       </Card>
 

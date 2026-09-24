@@ -45,6 +45,7 @@ interface CommentRow {
 
 interface PostRow {
   id: string;
+  platform: 'facebook' | 'instagram';
   provider_post_id: string;
   platform_post_id: string;
   content: string | null;
@@ -176,7 +177,7 @@ export default function CommentsPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          post_id: posts.find((post) => post.id === postId)?.provider_post_id,
+          social_post_id: postId,
           comment_id: commentId,
           message,
         }),
@@ -295,7 +296,11 @@ export default function CommentsPage() {
                   className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1 text-xs"
                 >
                   <ExternalLink className="size-3" />
-                  Facebook
+                  {t(
+                    selectedPost?.platform === 'instagram'
+                      ? 'instagram'
+                      : 'facebook'
+                  )}
                 </a>
               ) : null}
             </div>
@@ -407,6 +412,12 @@ export default function CommentsPage() {
                         {post.content || t('postWithoutText')}
                       </p>
                       <p className="text-muted-foreground mt-1 text-xs">
+                        {t(
+                          post.platform === 'instagram'
+                            ? 'instagram'
+                            : 'facebook'
+                        )}
+                        {' · '}
                         {t('commentsCount', { count: post.comments.length })}
                         {post.created_time
                           ? ` · ${dateLabel(post.created_time)}`
@@ -429,6 +440,12 @@ export default function CommentsPage() {
                         {selectedPost.content || t('postWithoutText')}
                       </CardTitle>
                       <CardDescription className="mt-1">
+                        {t(
+                          selectedPost.platform === 'instagram'
+                            ? 'instagram'
+                            : 'facebook'
+                        )}
+                        {' · '}
                         {t('commentsCount', {
                           count: selectedPost.comments.length,
                         })}
@@ -447,7 +464,13 @@ export default function CommentsPage() {
                         }
                       >
                         <ExternalLink />
-                        {t('openPost')}
+                        {t('openPost', {
+                          provider: t(
+                            selectedPost.platform === 'instagram'
+                              ? 'instagram'
+                              : 'facebook'
+                          ),
+                        })}
                       </Button>
                     ) : null}
                   </div>

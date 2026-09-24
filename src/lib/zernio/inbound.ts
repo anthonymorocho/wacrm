@@ -86,7 +86,13 @@ export async function processZernioEvent(
 
   if (isRecord(payload) && payload.event === 'comment.received') {
     const comment = parseZernioCommentEvent(payload);
-    if (!comment || connection.status !== 'connected') return 'ignored';
+    if (
+      !comment ||
+      connection.status !== 'connected' ||
+      comment.platform !==
+        (connection.provider === 'instagram' ? 'instagram' : 'facebook')
+    )
+      return 'ignored';
     await persistZernioCommentEvent(db, {
       accountId: connection.account_id,
       zernioAccountId: account.accountId,
@@ -98,9 +104,11 @@ export async function processZernioEvent(
 
   const message = parseZernioMessage(payload);
   if (
-    !message || connection.status !== 'connected' ||
+    !message ||
+    connection.status !== 'connected' ||
     message.provider !== connection.provider
-  ) return 'ignored';
+  )
+    return 'ignored';
 
   const { data: channel, error } = await db
     .from('meta_channels')
@@ -112,9 +120,11 @@ export async function processZernioEvent(
     .maybeSingle();
   if (error) throw error;
   if (
-    !channel || channel.provider !== message.provider ||
+    !channel ||
+    channel.provider !== message.provider ||
     channel.integration_source !== 'zernio'
-  ) return 'ignored';
+  )
+    return 'ignored';
 
   return processNormalizedMetaMessage(db, channel as MetaChannel, message);
 }

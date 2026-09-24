@@ -290,7 +290,7 @@ export async function ensureZernioWebhook(args: {
 
 export interface ZernioCommentedPost {
   id: string;
-  platform: string;
+  platform: ZernioSocialPlatform;
   accountId: string;
   /** Present in some API versions; falls back to the provider post id. */
   platformPostId: string;
@@ -308,12 +308,17 @@ function numberValue(value: unknown): number {
 }
 
 function normalizeCommentedPost(value: unknown): ZernioCommentedPost | null {
-  if (!isRecord(value) || typeof value.id !== 'string' || !value.id.trim()) {
+  if (
+    !isRecord(value) ||
+    typeof value.id !== 'string' ||
+    !value.id.trim() ||
+    (value.platform !== 'facebook' && value.platform !== 'instagram')
+  ) {
     return null;
   }
   return {
     id: value.id,
-    platform: typeof value.platform === 'string' ? value.platform : '',
+    platform: value.platform,
     accountId: typeof value.accountId === 'string' ? value.accountId : '',
     platformPostId:
       typeof value.platformPostId === 'string'
@@ -335,7 +340,7 @@ function normalizeCommentedPost(value: unknown): ZernioCommentedPost | null {
 export async function listZernioCommentedPosts(args: {
   apiKey: string;
   accountId: string;
-  platform?: 'facebook';
+  platform?: ZernioSocialPlatform;
   limit?: number;
   cursor?: string | null;
 }): Promise<ZernioCommentedPost[]> {
@@ -370,7 +375,7 @@ export interface ZernioInboxComment {
   };
   likeCount: number;
   replyCount: number;
-  platform: string;
+  platform?: string;
   url: string | null;
   replies: ZernioInboxComment[];
   canReply: boolean;
@@ -405,7 +410,7 @@ function normalizeInboxComment(value: unknown): ZernioInboxComment | null {
     },
     likeCount: numberValue(value.likeCount),
     replyCount: numberValue(value.replyCount),
-    platform: typeof value.platform === 'string' ? value.platform : '',
+    platform: typeof value.platform === 'string' ? value.platform : undefined,
     url: typeof value.url === 'string' ? value.url : null,
     replies,
     canReply: value.canReply !== false,
@@ -420,7 +425,7 @@ export interface ZernioInboxPostComments {
   cursor: string | null;
 }
 
-/** Read one post's current Facebook comment thread. */
+/** Read one post's current public comment thread. */
 export async function getZernioInboxPostComments(args: {
   apiKey: string;
   accountId: string;
@@ -459,7 +464,7 @@ export interface ZernioCommentReplyResult {
   isReply: boolean;
 }
 
-/** Reply publicly to a Facebook post or one of its comments. */
+/** Reply publicly to an organic post or one of its comments. */
 export async function replyToZernioInboxPost(args: {
   apiKey: string;
   accountId: string;

@@ -8,17 +8,18 @@ import {
   listZernioCommentedPosts,
   replyToZernioInboxPost,
 } from '@/lib/zernio/client';
+import type { ZernioSocialPlatform } from '@/lib/zernio/client';
 import {
   listStoredZernioComments,
   persistZernioCommentedPost,
   persistZernioCommentReply,
 } from '@/lib/zernio/comments';
-import { getZernioConnection } from '@/lib/zernio/connection';
+import { getZernioConnections } from '@/lib/zernio/connection';
 import { getZernioCredentials } from '@/lib/zernio/profile';
 
 interface ZernioContext {
   admin: ReturnType<typeof supabaseAdmin>;
-  connection: NonNullable<Awaited<ReturnType<typeof getZernioConnection>>>;
+  connections: Awaited<ReturnType<typeof getZernioConnections>>;
   apiKey: string;
 }
 
@@ -26,78 +27,111 @@ async function getConfiguredContext(
   accountId: string
 ): Promise<ZernioContext | null> {
   const admin = supabaseAdmin();
-  const [connection, credentials] = await Promise.all([
-    getZernioConnection(admin, accountId),
+  const [connections, credentials] = await Promise.all([
+    getZernioConnections(admin, accountId),
     getZernioCredentials(admin, accountId),
   ]);
-  if (!connection || connection.status !== 'connected' || !credentials) {
+  const activeConnections = connections.filter(
+    (connection) =>
+      connection.account_id === accountId && connection.status === 'connected'
+  );
+  if (!activeConnections.length || !credentials) {
     return null;
   }
-  return { admin, connection, apiKey: credentials.apiKey };
+  return { admin, connections: activeConnections, apiKey: credentials.apiKey };
+}
+
+function platformForProvider(
+  provider: 'messenger' | 'instagram'
+): ZernioSocialPlatform {
+  return provider === 'instagram' ? 'instagram' : 'facebook';
 }
 
 function invalidMessageResponse(message: string) {
   return NextResponse.json({ error: message }, { status: 400 });
 }
 
-/** GET /api/zernio/comments — sync and return mirrored Facebook comments. */
-export async function GET() {
+/** GET /api/zernio/comments — sync public comments for active channels. */
+export async function GET(request?: Request) {
   try {
     const { accountId } = await requireRole('viewer');
+    const requestedPlatform = request
+      ? new URL(request.url).searchParams.get('platform')
+      : null;
+    if (
+      requestedPlatform &&
+      requestedPlatform !== 'facebook' &&
+      requestedPlatform !== 'instagram'
+    ) {
+      return invalidMessageResponse('platform must be facebook or instagram');
+    }
     const context = await getConfiguredContext(accountId);
     if (!context) {
       return NextResponse.json(
         {
-          error: 'Connect a Facebook Page through Zernio first',
+          error: 'Connect a Facebook or Instagram account through Zernio first',
           code: 'zernio_not_configured',
         },
         { status: 503 }
       );
     }
 
-    const remotePosts = await listZernioCommentedPosts({
-      apiKey: context.apiKey,
-      accountId: context.connection.zernio_account_id,
-      platform: 'facebook',
-      limit: 25,
-    });
-
-    for (const remotePost of remotePosts) {
-      // The API call is account-scoped, but keep the check here as a second
-      // tenant boundary before persisting data returned by a provider.
-      if (
-        remotePost.platform !== 'facebook' ||
-        (remotePost.accountId &&
-          remotePost.accountId !== context.connection.zernio_account_id)
-      ) {
-        continue;
-      }
-      const comments = await getZernioInboxPostComments({
+    const posts = [];
+    for (const connection of context.connections) {
+      const platform = platformForProvider(connection.provider);
+      if (requestedPlatform && requestedPlatform !== platform) continue;
+      const remotePosts = await listZernioCommentedPosts({
         apiKey: context.apiKey,
-        accountId: context.connection.zernio_account_id,
-        postId: remotePost.id,
-        limit: 100,
+        accountId: connection.zernio_account_id,
+        platform,
+        limit: 25,
       });
-      await persistZernioCommentedPost(context.admin, {
+      for (const remotePost of remotePosts) {
+        if (
+          remotePost.platform !== platform ||
+          remotePost.accountId !== connection.zernio_account_id
+        )
+          continue;
+        const comments = await getZernioInboxPostComments({
+          apiKey: context.apiKey,
+          accountId: connection.zernio_account_id,
+          postId: remotePost.id,
+          limit: 100,
+        });
+        await persistZernioCommentedPost(context.admin, {
+          accountId,
+          zernioAccountId: connection.zernio_account_id,
+          metaChannelId: connection.meta_channel_id,
+          post: remotePost,
+          comments: comments.comments.filter(
+            (comment) => !comment.platform || comment.platform === platform
+          ),
+        });
+      }
+      const stored = await listStoredZernioComments(context.admin, {
         accountId,
-        zernioAccountId: context.connection.zernio_account_id,
-        metaChannelId: context.connection.meta_channel_id,
-        post: remotePost,
-        comments: comments.comments,
+        zernioAccountId: connection.zernio_account_id,
       });
+      posts.push(
+        ...stored.filter(
+          (post) =>
+            post.account_id === accountId &&
+            post.zernio_account_id === connection.zernio_account_id &&
+            post.meta_channel_id === connection.meta_channel_id &&
+            post.platform === platform
+        )
+      );
     }
-
-    const posts = await listStoredZernioComments(context.admin, {
-      accountId,
-      zernioAccountId: context.connection.zernio_account_id,
-    });
+    posts.sort((left, right) =>
+      (right.created_time ?? '').localeCompare(left.created_time ?? '')
+    );
     return NextResponse.json({ posts });
   } catch (error) {
     return toErrorResponse(error);
   }
 }
 
-/** POST /api/zernio/comments — publish a Facebook post/comment reply. */
+/** POST /api/zernio/comments — publish a public organic post/comment reply. */
 export async function POST(request: Request) {
   try {
     const { accountId, userId } = await requireRole('agent');
@@ -105,7 +139,7 @@ export async function POST(request: Request) {
     if (!context) {
       return NextResponse.json(
         {
-          error: 'Connect a Facebook Page through Zernio first',
+          error: 'Connect a Facebook or Instagram account through Zernio first',
           code: 'zernio_not_configured',
         },
         { status: 503 }
@@ -122,9 +156,9 @@ export async function POST(request: Request) {
       return invalidMessageResponse('Request body must be an object');
     }
 
-    const postId =
-      typeof (body as { post_id?: unknown }).post_id === 'string'
-        ? (body as { post_id: string }).post_id.trim()
+    const socialPostId =
+      typeof (body as { social_post_id?: unknown }).social_post_id === 'string'
+        ? (body as { social_post_id: string }).social_post_id.trim()
         : '';
     const commentIdValue = (body as { comment_id?: unknown }).comment_id;
     const commentId =
@@ -134,7 +168,8 @@ export async function POST(request: Request) {
         ? (body as { message: string }).message.trim()
         : '';
 
-    if (!postId) return invalidMessageResponse('post_id is required');
+    if (!socialPostId)
+      return invalidMessageResponse('social_post_id is required');
     if (!message) return invalidMessageResponse('message is required');
     if (message.length > 2000) {
       return invalidMessageResponse('message exceeds the 2000-character limit');
@@ -143,43 +178,62 @@ export async function POST(request: Request) {
       return invalidMessageResponse('comment_id must be a non-empty string');
     }
 
-    const mirroredPosts = await listStoredZernioComments(context.admin, {
-      accountId,
-      zernioAccountId: context.connection.zernio_account_id,
-    });
-    const post = mirroredPosts.find(
-      (candidate) => candidate.provider_post_id === postId
-    );
-    if (!post) {
+    let target: {
+      connection: (typeof context.connections)[number];
+      post: Awaited<ReturnType<typeof listStoredZernioComments>>[number];
+    } | null = null;
+    for (const connection of context.connections) {
+      const mirroredPosts = await listStoredZernioComments(context.admin, {
+        accountId,
+        zernioAccountId: connection.zernio_account_id,
+      });
+      const post = mirroredPosts.find(
+        (candidate) =>
+          candidate.account_id === accountId &&
+          candidate.zernio_account_id === connection.zernio_account_id &&
+          candidate.meta_channel_id === connection.meta_channel_id &&
+          candidate.platform === platformForProvider(connection.provider) &&
+          candidate.id === socialPostId
+      );
+      if (post) {
+        target = { connection, post };
+        break;
+      }
+    }
+    if (!target) {
       return NextResponse.json(
-        { error: 'Facebook post is not available in this account' },
+        { error: 'Post is not available in this account' },
         { status: 404 }
       );
     }
     if (
       commentId &&
-      !post.comments.some(
-        (comment) => comment.provider_comment_id === commentId
+      !target.post.comments.some(
+        (comment) =>
+          comment.provider_comment_id === commentId &&
+          comment.social_post_id === target.post.id &&
+          comment.zernio_account_id === target.connection.zernio_account_id &&
+          comment.platform === target.post.platform
       )
     ) {
       return NextResponse.json(
-        { error: 'Facebook comment is not available in this post' },
+        { error: 'Comment is not available in this post' },
         { status: 404 }
       );
     }
 
     const reply = await replyToZernioInboxPost({
       apiKey: context.apiKey,
-      accountId: context.connection.zernio_account_id,
-      postId,
+      accountId: target.connection.zernio_account_id,
+      postId: target.post.provider_post_id,
       commentId: commentId || null,
       message,
       idempotencyKey: `wacrm-comment-${accountId}-${userId}-${randomUUID()}`,
     });
     const comment = await persistZernioCommentReply(context.admin, {
       accountId,
-      zernioAccountId: context.connection.zernio_account_id,
-      providerPostId: postId,
+      zernioAccountId: target.connection.zernio_account_id,
+      providerPostId: target.post.provider_post_id,
       providerCommentId: reply.commentId,
       parentCommentId: commentId || null,
       message,

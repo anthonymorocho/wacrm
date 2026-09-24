@@ -1,6 +1,10 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
-import type { ZernioCommentedPost, ZernioInboxComment } from './client';
+import type {
+  ZernioCommentedPost,
+  ZernioInboxComment,
+  ZernioSocialPlatform,
+} from './client';
 
 type JsonRecord = Record<string, unknown>;
 
@@ -22,11 +26,13 @@ function normalizedTime(value: unknown): string | null {
 }
 
 export interface ParsedZernioCommentEvent {
+  platform: ZernioSocialPlatform;
   accountId: string;
   profileId: string;
   providerPostId: string;
   platformPostId: string;
   post: {
+    platform: ZernioSocialPlatform;
     zernioPostId: string;
     platformPostId: string;
     content: string | null;
@@ -35,6 +41,7 @@ export interface ParsedZernioCommentEvent {
     createdTime: string;
   };
   comment: {
+    platform: ZernioSocialPlatform;
     id: string;
     text: string;
     authorId: string;
@@ -50,7 +57,7 @@ export interface ParsedZernioCommentEvent {
   rawPayload: JsonRecord;
 }
 
-/** Validate and normalize the Facebook shape sent by comment.received. */
+/** Validate and normalize a public comment.received event. */
 export function parseZernioCommentEvent(
   payload: unknown
 ): ParsedZernioCommentEvent | null {
@@ -65,7 +72,8 @@ export function parseZernioCommentEvent(
     !comment ||
     !post ||
     !author ||
-    comment.platform !== 'facebook'
+    (comment.platform !== 'facebook' && comment.platform !== 'instagram') ||
+    (account.platform !== undefined && account.platform !== comment.platform)
   ) {
     return null;
   }
@@ -94,11 +102,13 @@ export function parseZernioCommentEvent(
   }
 
   return {
+    platform: comment.platform,
     accountId,
     profileId,
     providerPostId,
     platformPostId,
     post: {
+      platform: comment.platform,
       zernioPostId: providerPostId,
       platformPostId,
       content: typeof post.content === 'string' ? post.content : null,
@@ -107,11 +117,12 @@ export function parseZernioCommentEvent(
       createdTime: normalizedTime(post.createdTime) ?? createdTime,
     },
     comment: {
+      platform: comment.platform,
       id: commentId,
       text:
         typeof comment.text === 'string' && comment.text.trim()
           ? comment.text
-          : '[Facebook comment]',
+          : `[${comment.platform === 'instagram' ? 'Instagram' : 'Facebook'} comment]`,
       authorId,
       authorName: nonEmptyString(author.name),
       authorUsername: nonEmptyString(author.username),
@@ -159,7 +170,7 @@ export interface ZernioPostRow {
   zernio_account_id: string;
   provider_post_id: string;
   platform_post_id: string;
-  platform: 'facebook';
+  platform: ZernioSocialPlatform;
   content: string | null;
   picture: string | null;
   permalink: string | null;
@@ -179,7 +190,7 @@ export interface ZernioCommentRow {
   provider_comment_id: string;
   platform_post_id: string;
   parent_comment_id: string | null;
-  platform: 'facebook';
+  platform: ZernioSocialPlatform;
   message: string;
   author_id: string | null;
   author_name: string | null;
@@ -211,6 +222,7 @@ async function upsertPost(
     metaChannelId: string | null;
     providerPostId: string;
     platformPostId: string;
+    platform: ZernioSocialPlatform;
     content: string | null;
     picture: string | null;
     permalink: string | null;
@@ -228,7 +240,7 @@ async function upsertPost(
         zernio_account_id: args.zernioAccountId,
         provider_post_id: args.providerPostId,
         platform_post_id: args.platformPostId,
-        platform: 'facebook',
+        platform: args.platform,
         content: args.content,
         picture: args.picture,
         permalink: args.permalink,
@@ -252,6 +264,7 @@ async function upsertComment(
     zernioAccountId: string;
     socialPostId: string;
     platformPostId: string;
+    platform: ZernioSocialPlatform;
     providerCommentId: string;
     parentCommentId: string | null;
     message: string;
@@ -280,7 +293,7 @@ async function upsertComment(
         provider_comment_id: args.providerCommentId,
         platform_post_id: args.platformPostId,
         parent_comment_id: args.parentCommentId,
-        platform: 'facebook',
+        platform: args.platform,
         message: args.message,
         author_id: args.authorId,
         author_name: args.authorName,
@@ -310,6 +323,7 @@ function commentRowArgs(
   zernioAccountId: string,
   socialPostId: string,
   platformPostId: string,
+  platform: ZernioSocialPlatform,
   comment: FlattenedZernioComment,
   rawPayload: JsonRecord = {}
 ) {
@@ -318,9 +332,12 @@ function commentRowArgs(
     zernioAccountId,
     socialPostId,
     platformPostId,
+    platform,
     providerCommentId: comment.id,
     parentCommentId: comment.parentCommentId,
-    message: comment.message || '[Facebook comment]',
+    message:
+      comment.message ||
+      `[${platform === 'instagram' ? 'Instagram' : 'Facebook'} comment]`,
     authorId: comment.from.id,
     authorName: comment.from.name,
     authorUsername: comment.from.username,
@@ -355,6 +372,7 @@ export async function persistZernioCommentedPost(
     metaChannelId: args.metaChannelId,
     providerPostId: args.post.id,
     platformPostId: args.post.platformPostId,
+    platform: args.post.platform,
     content: args.post.content,
     picture: args.post.picture,
     permalink: args.post.permalink,
@@ -364,6 +382,7 @@ export async function persistZernioCommentedPost(
   });
   const comments = [] as ZernioCommentRow[];
   for (const comment of flattenZernioComments(args.comments)) {
+    if (comment.platform && comment.platform !== args.post.platform) continue;
     comments.push(
       await upsertComment(
         db,
@@ -372,6 +391,7 @@ export async function persistZernioCommentedPost(
           args.zernioAccountId,
           post.id,
           post.platform_post_id,
+          post.platform,
           comment
         )
       )
@@ -396,6 +416,7 @@ export async function persistZernioCommentEvent(
     metaChannelId: args.metaChannelId,
     providerPostId: args.event.providerPostId,
     platformPostId: args.event.platformPostId,
+    platform: args.event.platform,
     content: args.event.post.content,
     picture: args.event.post.picture,
     permalink: args.event.post.permalink,
@@ -408,6 +429,7 @@ export async function persistZernioCommentEvent(
     zernioAccountId: args.zernioAccountId,
     socialPostId: post.id,
     platformPostId: args.event.platformPostId,
+    platform: args.event.platform,
     providerCommentId: args.event.comment.id,
     parentCommentId: args.event.comment.parentCommentId,
     message: args.event.comment.text,
@@ -442,7 +464,7 @@ export async function persistZernioCommentReply(
 ): Promise<ZernioCommentRow> {
   const { data: post, error } = await db
     .from('social_posts')
-    .select('id, platform_post_id')
+    .select('id, platform_post_id, platform')
     .eq('account_id', args.accountId)
     .eq('zernio_account_id', args.zernioAccountId)
     .eq('provider_post_id', args.providerPostId)
@@ -454,6 +476,7 @@ export async function persistZernioCommentReply(
     zernioAccountId: args.zernioAccountId,
     socialPostId: post.id,
     platformPostId: post.platform_post_id,
+    platform: post.platform,
     providerCommentId: args.providerCommentId,
     parentCommentId: args.parentCommentId,
     message: args.message,

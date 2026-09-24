@@ -18,6 +18,7 @@ import {
   Tags,
   Filter,
   Upload,
+  Download,
   Loader2,
   ArrowRight,
   ArrowLeft,
@@ -30,6 +31,7 @@ type CustomFieldOperator = 'is' | 'is_not' | 'contains';
 type CsvErrorKey =
   | 'errorCsvMissingPhone'
   | 'errorCsvInvalidPhones'
+  | 'errorCsvNoContacts'
   | 'errorCsvParse';
 
 interface CustomFieldFilter {
@@ -278,7 +280,7 @@ export function Step2SelectAudience({
         return;
       }
       if (parsed.rows.length === 0) {
-        setCsvError('errorCsvParse');
+        setCsvError('errorCsvNoContacts');
         return;
       }
 
@@ -309,6 +311,20 @@ export function Step2SelectAudience({
     } finally {
       setCsvLoading(false);
     }
+  }
+
+  function downloadCsvTemplate() {
+    const blob = new Blob(['\uFEFFphone,name\r\n'], {
+      type: 'text/csv;charset=utf-8;',
+    });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = t('selectAudience.csvTemplateFilename');
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   }
 
   const isValid =
@@ -483,22 +499,33 @@ export function Step2SelectAudience({
                 {t('selectAudience.csvFormatDesc')}
               </p>
             </div>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => csvInputRef.current?.click()}
-              disabled={csvLoading}
-              aria-describedby="broadcast-csv-format"
-            >
-              {csvLoading ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Upload className="h-4 w-4" />
-              )}
-              {csvLoading
-                ? t('selectAudience.uploadingCsv')
-                : t('selectAudience.uploadCsv')}
-            </Button>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={downloadCsvTemplate}
+                disabled={csvLoading}
+              >
+                <Download className="h-4 w-4" />
+                {t('selectAudience.downloadCsvTemplate')}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => csvInputRef.current?.click()}
+                disabled={csvLoading}
+                aria-describedby="broadcast-csv-format"
+              >
+                {csvLoading ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Upload className="h-4 w-4" />
+                )}
+                {csvLoading
+                  ? t('selectAudience.uploadingCsv')
+                  : t('selectAudience.uploadCsv')}
+              </Button>
+            </div>
             <input
               ref={csvInputRef}
               type="file"

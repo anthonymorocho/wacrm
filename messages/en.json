@@ -877,6 +877,8 @@
         "operatorContains": "Contains",
         "value": "Value",
         "valuePlaceholder": "Value to match",
+        "downloadCsvTemplate": "Download CSV template",
+        "csvTemplateFilename": "campaign-audience-template.csv",
         "uploadCsv": "Upload CSV File",
         "csvFormatDesc": "Must contain a 'phone' column (E.164 format). 'name' column is optional.",
         "csvContactsFound": "{count} valid contact(s) found in CSV.",
@@ -887,6 +889,7 @@
         "selectTypeToEstimate": "Select an audience type to see the estimate.",
         "errorLoadTags": "Failed to load tags",
         "errorLoadFields": "Failed to load custom fields",
+        "errorCsvNoContacts": "Add at least one contact with a phone number to the CSV.",
         "errorCsvParse": "Could not parse CSV file.",
         "errorCsvInvalidPhones": "Each phone number must use E.164 format (for example, +14155550123). Fix the CSV and upload it again.",
         "errorCsvMissingPhone": "CSV must have a 'phone' column."

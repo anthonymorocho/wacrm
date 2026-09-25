@@ -351,12 +351,12 @@ export function ContactSidebar({
           : 'h-full border-l 2xl:w-70'
       )}
     >
-      <ScrollArea className={isQuickActions ? 'max-h-32' : 'flex-1'}>
+      <ScrollArea className={isQuickActions ? 'shrink-0' : 'min-h-0 flex-1'}>
         <div
           className={cn(
             'p-4',
             isQuickActions &&
-              'flex flex-wrap items-center gap-x-5 gap-y-2 px-3 py-2.5 lg:flex-nowrap lg:px-4'
+              'flex flex-wrap items-center gap-x-5 gap-y-2 px-3 py-2.5 md:flex-nowrap md:px-4'
           )}
         >
           {/* Contact Info */}
@@ -424,7 +424,7 @@ export function ContactSidebar({
             className={cn(
               !isQuickActions && 'hidden',
               isQuickActions &&
-                'flex min-w-0 basis-full items-center gap-2.5 lg:flex-1'
+                'flex min-w-0 basis-full items-center gap-2.5 md:w-fit md:max-w-[40%] md:flex-none md:basis-auto'
             )}
           >
             <div
@@ -536,7 +536,7 @@ export function ContactSidebar({
             className={cn(
               !isQuickActions && 'hidden',
               isQuickActions &&
-                'border-border flex min-w-0 basis-full flex-wrap items-center gap-2.5 lg:flex-[1.25] lg:flex-nowrap lg:border-l lg:pl-4'
+                'border-border flex min-w-0 basis-full flex-wrap items-center gap-2.5 md:flex-1 md:basis-0 md:flex-nowrap md:border-l md:pl-4'
             )}
           >
             <div className="flex shrink-0 items-center gap-2">
@@ -570,7 +570,7 @@ export function ContactSidebar({
                 </button>
               )}
             </div>
-            <div className="flex min-w-0 flex-1 basis-full flex-wrap items-center justify-start gap-2 lg:basis-auto">
+            <div className="flex min-w-0 flex-1 basis-full flex-wrap items-center justify-start gap-2 md:basis-auto">
               {deals.length === 0 ? (
                 <div className="flex min-w-0 flex-wrap items-center gap-2">
                   {(!canEditContact || pipelines.length === 0) && (
@@ -601,14 +601,8 @@ export function ContactSidebar({
                 deals.map((deal) => (
                   <div
                     key={deal.id}
-                    className="flex max-w-full shrink-0 items-center gap-2"
+                    className="flex max-w-full shrink-0 items-center"
                   >
-                    <span
-                      title={deal.title}
-                      className="text-muted-foreground max-w-20 truncate text-[11px] font-medium lg:max-w-28"
-                    >
-                      {deal.title}
-                    </span>
                     <div className="flex min-w-0 flex-wrap items-center gap-1.5">
                       <PipelineStageFields
                         pipelines={pipelines}
@@ -790,6 +784,10 @@ function PipelineStageFields({
     <div className="bg-background/45 ring-border/60 flex max-w-full min-w-0 items-center gap-0.5 rounded-xl p-1 shadow-sm ring-1 ring-inset">
       <Select
         value={pipelineId}
+        items={pipelines.map((pipeline) => ({
+          value: pipeline.id,
+          label: pipeline.name,
+        }))}
         onValueChange={(value) => value && onPipelineChange(value)}
         disabled={disabled}
       >
@@ -817,6 +815,19 @@ function PipelineStageFields({
       />
       <Select
         value={stageId}
+        items={stages.map((stage) => ({
+          value: stage.id,
+          label: (
+            <span className="flex min-w-0 items-center gap-2">
+              <span
+                aria-hidden="true"
+                className="size-2 shrink-0 rounded-full"
+                style={{ backgroundColor: stage.color }}
+              />
+              <span className="truncate">{stage.name}</span>
+            </span>
+          ),
+        }))}
         onValueChange={(value) => value && onStageChange(value)}
         disabled={disabled || stages.length === 0}
       >

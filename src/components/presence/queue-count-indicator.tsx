@@ -48,6 +48,37 @@ export function shouldShowQueueCount(
   return !profileLoading && Boolean(accountId);
 }
 
+function describeQueueCountFailure(error: unknown): string {
+  const fields =
+    error && typeof error === "object"
+      ? (error as Record<string, unknown>)
+      : {};
+  const message =
+    error instanceof Error
+      ? error.message
+      : typeof fields.message === "string"
+        ? fields.message
+        : String(error);
+  const name = error instanceof Error ? error.name : fields.name;
+  const extra = [
+    ["channel", fields.channel],
+    ["code", fields.code],
+    ["status", fields.status],
+    ["details", fields.details],
+    ["hint", fields.hint],
+  ]
+    .filter(([, value]) => typeof value === "string" || typeof value === "number")
+    .map(([key, value]) => `${key}=${String(value)}`);
+
+  return [message || String(name || "Queue count error"), ...extra].join(" | ");
+}
+
+function logQueueCountFailure(stage: string, error: unknown) {
+  console.error(
+    `[QueueCountIndicator] ${stage}: ${describeQueueCountFailure(error)}`,
+  );
+}
+
 /** Compact account-scoped queue count for the global dashboard header. */
 export function QueueCountIndicator() {
   const t = useTranslations("Header");
@@ -62,7 +93,7 @@ export function QueueCountIndicator() {
       const counts = await loadQueueCounts(createClient(), accountId);
       setQueueCounts(counts);
     } catch (error) {
-      console.error("[QueueCountIndicator] queue count failed:", error);
+      logQueueCountFailure("queue count failed", error);
     }
   }, [accountId]);
 
@@ -72,7 +103,7 @@ export function QueueCountIndicator() {
     void loadQueueCounts(createClient(), accountId)
       .then((counts) => setQueueCounts(counts))
       .catch((error) =>
-        console.error("[QueueCountIndicator] initial queue count failed:", error),
+        logQueueCountFailure("initial queue count failed", error),
       );
     const refreshWhenVisible = () => {
       if (document.visibilityState === "visible") void refresh();
@@ -91,9 +122,6 @@ export function QueueCountIndicator() {
   if (!shouldShowQueueCount(profileLoading, accountId)) return null;
 
   const queueTotal = queueCounts?.total;
-  const visibleChannels = QUEUE_CHANNELS.filter(
-    ({ key }) => key !== "instagram" || (queueCounts?.instagram ?? 0) > 0,
-  );
 
   return (
     <TooltipProvider delay={200}>
@@ -129,7 +157,7 @@ export function QueueCountIndicator() {
               {t("queueBreakdown")}
             </p>
             <div className="space-y-1.5">
-              {visibleChannels.map(({ key, labelKey, dotClassName }) => (
+              {QUEUE_CHANNELS.map(({ key, labelKey, dotClassName }) => (
                 <div
                   key={key}
                   className="flex items-center justify-between gap-5 text-xs"

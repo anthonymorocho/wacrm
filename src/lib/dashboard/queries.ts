@@ -197,16 +197,34 @@ export async function loadQueueCounts(
 ): Promise<QueueCountBreakdown> {
   const entries = await Promise.all(
     QUEUE_CHANNELS.map(async (channel) => {
-      const { count, error } = await db
-        .from('conversations')
-        .select('id', { count: 'exact', head: true })
-        .eq('account_id', accountId)
-        .is('assigned_agent_id', null)
-        .eq('channel', channel)
-        .in('status', ['open', 'pending'])
+      try {
+        const { count, error } = await db
+          .from('conversations')
+          .select('id', { count: 'exact', head: true })
+          .eq('account_id', accountId)
+          .is('assigned_agent_id', null)
+          .eq('channel', channel)
+          .in('status', ['open', 'pending'])
 
-      if (error) throw error
-      return [channel, count ?? 0] as const
+        if (error) throw error
+        return [channel, count ?? 0] as const
+      } catch (cause) {
+        const details =
+          cause && typeof cause === 'object'
+            ? (cause as Record<string, unknown>)
+            : {};
+        const message =
+          typeof details.message === 'string' && details.message
+            ? details.message
+            : String(cause);
+        throw Object.assign(new Error(message), {
+          channel,
+          code: details.code,
+          details: details.details,
+          hint: details.hint,
+          status: details.status,
+        });
+      }
     }),
   )
 

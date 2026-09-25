@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { Loader2, Route } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -21,6 +22,7 @@ import { SettingsPanelHead } from './settings-panel-head';
 const DEFAULT_CAPACITY = 400;
 
 export function RoutingSettings() {
+  const t = useTranslations('Settings.routing');
   const { accountId, canEditSettings, profileLoading } = useAuth();
   const [value, setValue] = useState(String(DEFAULT_CAPACITY));
   const [savedValue, setSavedValue] = useState(DEFAULT_CAPACITY);
@@ -39,7 +41,7 @@ export function RoutingSettings() {
       .then(({ data, error }) => {
         if (cancelled) return;
         if (error) {
-          toast.error('Could not load routing settings');
+          toast.error(t('loadFailed'));
         } else {
           const capacity = Number(
             data?.max_active_conversations_per_agent ?? DEFAULT_CAPACITY
@@ -54,13 +56,13 @@ export function RoutingSettings() {
     return () => {
       cancelled = true;
     };
-  }, [accountId]);
+  }, [accountId, t]);
 
   async function save() {
     if (!accountId || !canEditSettings) return;
     const capacity = parseCapacity(value);
     if (capacity === null) {
-      toast.error('Capacity must be a positive whole number');
+      toast.error(t('invalidCapacity'));
       return;
     }
 
@@ -72,37 +74,33 @@ export function RoutingSettings() {
     setSaving(false);
 
     if (error) {
-      toast.error('Could not save routing settings');
+      toast.error(t('saveFailed'));
       return;
     }
     setSavedValue(capacity);
     setValue(String(capacity));
-    toast.success('Routing capacity saved');
+    toast.success(t('saveSuccess'));
   }
 
   const dirty = parseCapacity(value) !== savedValue;
 
   return (
     <section className="animate-in fade-in-50 max-w-2xl duration-200">
-      <SettingsPanelHead
-        title="Conversation routing"
-        description="Choose how many active conversations automatic assignment can place with one team member."
-      />
+      <SettingsPanelHead title={t('title')} description={t('description')} />
       <Card>
         <CardHeader>
           <CardTitle className="text-foreground flex items-center gap-2">
             <Route className="text-primary size-4" />
-            Active conversations per agent
+            {t('cardTitle')}
           </CardTitle>
           <CardDescription className="text-muted-foreground">
-            New conversations stay queued when every eligible agent reaches this
-            limit.
+            {t('cardDescription')}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid gap-2 sm:max-w-xs">
             <Label htmlFor="routing-capacity" className="text-muted-foreground">
-              Maximum active conversations
+              {t('maxCapacity')}
             </Label>
             <input
               id="routing-capacity"
@@ -117,7 +115,7 @@ export function RoutingSettings() {
           </div>
           {!canEditSettings && (
             <p className="text-muted-foreground text-xs">
-              Only account admins can change routing capacity.
+              {t('adminOnly')}
             </p>
           )}
           {canEditSettings && (
@@ -126,7 +124,7 @@ export function RoutingSettings() {
               disabled={saving || loading || !dirty}
             >
               {saving ? <Loader2 className="size-4 animate-spin" /> : null}
-              {saving ? 'Saving…' : 'Save capacity'}
+              {saving ? t('saving') : t('save')}
             </Button>
           )}
         </CardContent>

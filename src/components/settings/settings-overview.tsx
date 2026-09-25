@@ -63,6 +63,7 @@ export function SettingsOverview({
   const t = useTranslations('Settings.overview');
   const tRoles = useTranslations('Settings.roles');
   const tSections = useTranslations('Settings.sections');
+  const userId = user?.id;
 
   const [counts, setCounts] = useState<OverviewCounts | null>(null);
   const [countsLoading, setCountsLoading] = useState(true);
@@ -77,10 +78,9 @@ export function SettingsOverview({
   const [socialChannelsLoading, setSocialChannelsLoading] = useState(true);
 
   useEffect(() => {
-    if (!user || !accountId) return;
+    if (!userId || !accountId) return;
     let cancelled = false;
     const supabase = createClient();
-    const userId = user.id;
     const acctId = accountId;
 
     // Cheap counts — resolve fast, render immediately.
@@ -231,12 +231,29 @@ export function SettingsOverview({
 
       if (zernioResult.status === 'fulfilled' && zernioResult.value.ok) {
         const body = zernioResult.value.body;
-        const connection =
+        const bodyRecord =
           body && typeof body === 'object' && !Array.isArray(body)
-            ? (body as { connection?: { status?: unknown } | null }).connection
+            ? (body as { connections?: unknown })
             : null;
-        if (connection) {
-          next.messenger = {
+        const connections = Array.isArray(bodyRecord?.connections)
+          ? bodyRecord.connections
+          : [];
+
+        for (const rawConnection of connections) {
+          const connection =
+            rawConnection &&
+            typeof rawConnection === 'object' &&
+            !Array.isArray(rawConnection)
+              ? (rawConnection as { provider?: unknown; status?: unknown })
+              : null;
+          if (
+            connection?.provider !== 'messenger' &&
+            connection?.provider !== 'instagram'
+          ) {
+            continue;
+          }
+
+          next[connection.provider] = {
             configured: true,
             connected: connection.status === 'connected',
           };
@@ -250,7 +267,7 @@ export function SettingsOverview({
     return () => {
       cancelled = true;
     };
-  }, [user?.id, accountId, canManageMembers]);
+  }, [userId, accountId, canManageMembers]);
 
   const displayName = profile?.full_name || profile?.email || t('yourAccount');
   const initial = (profile?.full_name || profile?.email || 'U')
@@ -335,7 +352,7 @@ export function SettingsOverview({
     {
       section: 'routing',
       loading: false,
-      subtitle: 'Automatic assignment capacity',
+      subtitle: t('routingCapacity'),
     },
     {
       section: 'templates',

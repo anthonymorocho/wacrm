@@ -78,7 +78,6 @@ import {
 } from '@/lib/flows/edges';
 import { autoLayout, shouldAutoLayout } from '@/lib/flows/layout';
 import {
-  NODE_META,
   NodeIconChip,
   groupNodeTypesByCategory,
   nodeColors,
@@ -136,7 +135,6 @@ function slotColor(nodeType: NodeType, slotId: string, fallback: string) {
 function FlowNodeCard({ data, selected }: NodeProps) {
   const t = useTranslations('Flows.builder');
   const { node, isEntry, isFlashed } = data as NodeData;
-  const meta = NODE_META[node.node_type];
   const c = nodeColors(node.node_type);
   const tSummary = useTranslations('Flows.summary');
   const summary = summarizeNode(node, tSummary);
@@ -214,29 +212,36 @@ function FlowNodeCard({ data, selected }: NodeProps) {
 
       {isMultiSlot && (
         <div className="border-border mt-2.5 flex flex-col gap-1 border-t pt-2.5">
-          {slots.map((slot) => (
-            <div
-              key={slot.id}
-              className="text-muted-foreground relative flex items-center justify-between gap-2 rounded px-1 py-0.5 text-[11px]"
-            >
-              <span className="truncate" title={slot.label}>
-                {slot.label}
-              </span>
-              <Handle
-                type="source"
-                id={slot.id}
-                position={Position.Right}
-                style={{
-                  borderColor: slotColor(node.node_type, slot.id, c.solid),
-                }}
-                // Override default absolute positioning so the handle
-                // sits flush with the right edge of the card instead
-                // of floating at vertical center. The negative offset
-                // matches the card's px-3 + the handle's own radius.
-                className="!bg-card !relative !top-auto !right-auto !h-2.5 !w-2.5 !translate-x-[14px] !transform-none !border-2"
-              />
-            </div>
-          ))}
+          {slots.map((slot) => {
+            const label =
+              node.node_type === 'condition'
+                ? t(slot.id === 'true' ? 'trueBranch' : 'falseBranch')
+                : slot.label;
+
+            return (
+              <div
+                key={slot.id}
+                className="text-muted-foreground relative flex items-center justify-between gap-2 rounded px-1 py-0.5 text-[11px]"
+              >
+                <span className="truncate" title={label}>
+                  {label}
+                </span>
+                <Handle
+                  type="source"
+                  id={slot.id}
+                  position={Position.Right}
+                  style={{
+                    borderColor: slotColor(node.node_type, slot.id, c.solid),
+                  }}
+                  // Override default absolute positioning so the handle
+                  // sits flush with the right edge of the card instead
+                  // of floating at vertical center. The negative offset
+                  // matches the card's px-3 + the handle's own radius.
+                  className="!bg-card !relative !top-auto !right-auto !h-2.5 !w-2.5 !translate-x-[14px] !transform-none !border-2"
+                />
+              </div>
+            );
+          })}
         </div>
       )}
 
@@ -369,7 +374,12 @@ function FlowCanvasInner() {
       source: e.source,
       target: e.target,
       sourceHandle: e.sourceHandle,
-      label: e.label,
+      label:
+        e.sourceHandle === 'true'
+          ? t('trueBranch')
+          : e.sourceHandle === 'false'
+            ? t('falseBranch')
+            : e.label,
       // Mode-aware via CSS tokens so edge chrome flips with light/dark.
       labelStyle: { fill: 'var(--muted-foreground)', fontSize: 11 },
       labelBgStyle: { fill: 'var(--card)' },
@@ -379,7 +389,7 @@ function FlowCanvasInner() {
     }));
 
     return rfEdges;
-  }, [builderNodes]);
+  }, [builderNodes, t]);
 
   const handleNodesChange = useCallback(
     (changes: NodeChange<RfNode<NodeData>>[]) => {
@@ -624,7 +634,6 @@ function NodeEditSheet({
       </Sheet>
     );
   }
-  const meta = NODE_META[node.node_type];
   const c = nodeColors(node.node_type);
   return (
     <Sheet open={open} onOpenChange={(v) => !v && onClose()}>
@@ -757,7 +766,6 @@ function CanvasAddNodeButton({ t }: { t: ReturnType<typeof useTranslations> }) {
                 {t(`categories.${group.id}`)}
               </DropdownMenuLabel>
               {group.types.map((t_type) => {
-                const meta = NODE_META[t_type];
                 return (
                   <DropdownMenuItem
                     key={t_type}

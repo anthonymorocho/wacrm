@@ -18,7 +18,7 @@ import {
   FileText,
 } from "lucide-react";
 
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { useCan } from "@/hooks/use-can";
 import { Button } from "@/components/ui/button";
 import { GatedButton } from "@/components/ui/gated-button";
@@ -33,6 +33,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { FlowDeleteDialog } from "@/components/flows/flow-delete-dialog";
 
 /**
  * Flows list page.
@@ -84,22 +85,29 @@ const TEMPLATE_ICONS = {
 
 export default function FlowsPage() {
   const router = useRouter();
+  const locale = useLocale();
   const canCreate = useCan("send-messages");
   const t = useTranslations("Flows.list");
+  const tFlows = useTranslations("Flows");
+  const tDeleteDialog = useTranslations("Flows.deleteDialog");
   const [flows, setFlows] = useState<FlowRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [createOpen, setCreateOpen] = useState(false);
   const [newName, setNewName] = useState("");
   const [creating, setCreating] = useState(false);
   const [templates, setTemplates] = useState<TemplateSummary[]>([]);
+  const [flowToDelete, setFlowToDelete] = useState<FlowRow | null>(null);
+  const [deletingFlowId, setDeletingFlowId] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
         const [flowsRes, tmplRes] = await Promise.all([
-          fetch("/api/flows"),
-          fetch("/api/flows/templates"),
+          fetch(`/api/flows?locale=${encodeURIComponent(locale)}`),
+          fetch(
+            `/api/flows/templates?locale=${encodeURIComponent(locale)}`,
+          ),
         ]);
         if (!flowsRes.ok) {
           throw new Error(`Failed to load flows: ${flowsRes.status}`);
@@ -126,7 +134,7 @@ export default function FlowsPage() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [locale, t]);
 
   async function handleCreate() {
     if (!newName.trim()) return;
@@ -160,7 +168,7 @@ export default function FlowsPage() {
       const res = await fetch("/api/flows", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ template_slug: slug }),
+        body: JSON.stringify({ template_slug: slug, locale }),
       });
       if (!res.ok) {
         const json = await res.json().catch(() => ({}));
@@ -170,24 +178,28 @@ export default function FlowsPage() {
       setCreateOpen(false);
       router.push(`/flows/${json.flow.id}`);
     } catch (err) {
-      const msg = err instanceof Error ? err.message : t("cloneError");
-      toast.error(msg);
+      console.error(err);
+      toast.error(t("cloneError"));
     } finally {
       setCreating(false);
     }
   }
 
-  async function handleDelete(flow: FlowRow) {
-    const yes = window.confirm(t("deleteConfirm", { name: flow.name }));
-    if (!yes) return;
+  async function confirmDelete() {
+    const flow = flowToDelete;
+    if (!flow || deletingFlowId) return;
+    setDeletingFlowId(flow.id);
     try {
       const res = await fetch(`/api/flows/${flow.id}`, { method: "DELETE" });
       if (!res.ok) throw new Error(`Delete failed: ${res.status}`);
       setFlows((prev) => prev.filter((f) => f.id !== flow.id));
+      setFlowToDelete(null);
       toast.success(t("deleteSuccess"));
     } catch (err) {
       console.error(err);
       toast.error(t("deleteError"));
+    } finally {
+      setDeletingFlowId(null);
     }
   }
 
@@ -216,6 +228,7 @@ export default function FlowsPage() {
         <GatedButton
           canAct={canCreate}
           gateReason="create flows"
+          readOnlyMessage={tFlows("readOnlyCreate")}
           onClick={() => setCreateOpen(true)}
         >
           <Plus className="h-4 w-4" />
@@ -227,6 +240,7 @@ export default function FlowsPage() {
         <EmptyState
           onCreate={() => setCreateOpen(true)}
           canCreate={canCreate}
+          readOnlyMessage={tFlows("readOnlyCreate")}
           t={t}
         />
       ) : (
@@ -236,7 +250,7 @@ export default function FlowsPage() {
               key={flow.id}
               flow={flow}
               onEdit={() => router.push(`/flows/${flow.id}`)}
-              onDelete={() => handleDelete(flow)}
+              onDelete={() => setFlowToDelete(flow)}
               t={t}
             />
           ))}
@@ -248,7 +262,10 @@ export default function FlowsPage() {
             `sm:max-w-sm` baked into its default classes. Without the
             sm: prefix our override applies at base only and the
             sm-scoped 384px wins at every real desktop breakpoint. */}
-        <DialogContent className="sm:max-w-4xl bg-popover text-popover-foreground">
+        <DialogContent
+          className="sm:max-w-4xl bg-popover text-popover-foreground"
+          closeLabel={t("cancel")}
+        >
           <DialogHeader>
             <DialogTitle>{t("createTitle")}</DialogTitle>
             <DialogDescription className="text-muted-foreground">
@@ -319,6 +336,22 @@ export default function FlowsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <FlowDeleteDialog
+        open={flowToDelete !== null}
+        onOpenChange={(open) => {
+          if (!open) setFlowToDelete(null);
+        }}
+        title={tDeleteDialog("title")}
+        description={tDeleteDialog("description", {
+          name: flowToDelete?.name ?? "",
+        })}
+        cancelLabel={tDeleteDialog("cancel")}
+        confirmLabel={tDeleteDialog("confirm")}
+        deletingLabel={tDeleteDialog("deleting")}
+        deleting={deletingFlowId !== null}
+        onConfirm={confirmDelete}
+      />
     </div>
   );
 }
@@ -326,10 +359,12 @@ export default function FlowsPage() {
 function EmptyState({
   onCreate,
   canCreate,
+  readOnlyMessage,
   t,
 }: {
   onCreate: () => void;
   canCreate: boolean;
+  readOnlyMessage: string;
   t: ReturnType<typeof useTranslations>;
 }) {
   return (
@@ -346,6 +381,7 @@ function EmptyState({
       <GatedButton
         canAct={canCreate}
         gateReason="create flows"
+        readOnlyMessage={readOnlyMessage}
         onClick={onCreate}
         className="mt-5"
       >

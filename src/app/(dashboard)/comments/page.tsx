@@ -60,6 +60,19 @@ interface PostRow {
 
 type ReplyTarget = { postId: string; commentId: string | null } | null;
 
+async function readResponseBody(
+  response: Response
+): Promise<Record<string, unknown>> {
+  try {
+    const body: unknown = await response.json();
+    return body && typeof body === 'object' && !Array.isArray(body)
+      ? (body as Record<string, unknown>)
+      : {};
+  } catch {
+    return {};
+  }
+}
+
 function dateLabel(value: string | null): string {
   if (!value) return '';
   const date = new Date(value);
@@ -105,47 +118,63 @@ export default function CommentsPage() {
   const [replyTarget, setReplyTarget] = useState<ReplyTarget>(null);
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
+  const [syncing, setSyncing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sendingKey, setSendingKey] = useState<string | null>(null);
 
   const selectedPost =
     posts.find((post) => post.id === selectedPostId) ?? posts[0] ?? null;
 
-  const loadComments = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const response = await fetch('/api/zernio/comments', {
-        cache: 'no-store',
-      });
-      const body = await response.json();
-      if (!response.ok) {
-        throw new Error(
-          body.code === 'zernio_not_configured'
-            ? t('noConnection')
-            : body.error || t('loadFailed')
+  const loadComments = useCallback(
+    async (showLoading = true) => {
+      if (showLoading) setLoading(true);
+      setError(null);
+      try {
+        const response = await fetch('/api/zernio/comments', {
+          cache: 'no-store',
+        });
+        const body = await readResponseBody(response);
+        if (!response.ok) {
+          throw new Error(
+            body.code === 'zernio_not_configured'
+              ? t('noConnection')
+              : typeof body.error === 'string'
+                ? body.error
+                : t('loadFailed')
+          );
+        }
+        const nextPosts = Array.isArray(body.posts)
+          ? (body.posts as PostRow[])
+          : [];
+        setSyncing(body.syncing === true);
+        setPosts(nextPosts);
+        setSelectedPostId((current) =>
+          nextPosts.some((post) => post.id === current)
+            ? current
+            : (nextPosts[0]?.id ?? null)
         );
+      } catch (cause) {
+        const message =
+          cause instanceof Error ? cause.message : t('loadFailed');
+        setError(message);
+      } finally {
+        if (showLoading) setLoading(false);
       }
-      const nextPosts = Array.isArray(body.posts)
-        ? (body.posts as PostRow[])
-        : [];
-      setPosts(nextPosts);
-      setSelectedPostId((current) =>
-        nextPosts.some((post) => post.id === current)
-          ? current
-          : (nextPosts[0]?.id ?? null)
-      );
-    } catch (cause) {
-      const message = cause instanceof Error ? cause.message : t('loadFailed');
-      setError(message);
-    } finally {
-      setLoading(false);
-    }
-  }, [t]);
+    },
+    [t]
+  );
 
   useEffect(() => {
     if (!profileLoading) void loadComments();
   }, [loadComments, profileLoading]);
+
+  useEffect(() => {
+    if (!syncing) return;
+    const interval = window.setInterval(() => {
+      void loadComments(false);
+    }, 10_000);
+    return () => window.clearInterval(interval);
+  }, [loadComments, syncing]);
 
   const topLevelComments = useMemo(
     () =>
@@ -181,8 +210,12 @@ export default function CommentsPage() {
           zernioCommentReplyPayload(postId, commentId, message)
         ),
       });
-      const body = await response.json();
-      if (!response.ok) throw new Error(body.error || t('replyFailed'));
+      const body = await readResponseBody(response);
+      if (!response.ok) {
+        throw new Error(
+          typeof body.error === 'string' ? body.error : t('replyFailed')
+        );
+      }
       const sentComment = body.comment as CommentRow;
       setPosts((current) =>
         current.map((post) =>
@@ -339,12 +372,21 @@ export default function CommentsPage() {
           type="button"
           variant="outline"
           onClick={() => void loadComments()}
-          disabled={loading}
+          disabled={loading || syncing}
         >
-          <RefreshCw className={cn(loading && 'animate-spin')} />
-          {loading ? t('refreshing') : t('refresh')}
+          <RefreshCw className={cn((loading || syncing) && 'animate-spin')} />
+          {loading || syncing ? t('refreshing') : t('refresh')}
         </Button>
       </div>
+
+      {syncing ? (
+        <p
+          className="text-muted-foreground mt-3 flex items-center gap-2 text-sm"
+          role="status"
+        >
+          <Loader2 className="size-4 animate-spin" /> {t('syncing')}
+        </p>
+      ) : null}
 
       {error ? (
         <Card className="border-destructive/30 bg-destructive/5 mt-6">

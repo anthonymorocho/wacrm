@@ -214,6 +214,56 @@ export interface StoredZernioPost extends ZernioPostRow {
   comments: ZernioCommentRow[];
 }
 
+export interface ZernioCommentSyncClaim {
+  claimed: boolean;
+  syncing: boolean;
+}
+
+/** Atomically claim the shared provider sync for one CRM/Zernio account. */
+export async function claimZernioCommentSync(
+  db: SupabaseClient,
+  args: {
+    accountId: string;
+    zernioAccountId: string;
+    leaseToken: string;
+  }
+): Promise<ZernioCommentSyncClaim> {
+  const { data, error } = await db.rpc('claim_zernio_comment_sync', {
+    p_account_id: args.accountId,
+    p_zernio_account_id: args.zernioAccountId,
+    p_lease_token: args.leaseToken,
+  });
+  if (error) throw error;
+
+  const row = Array.isArray(data) ? data[0] : data;
+  if (!isRecord(row)) {
+    throw new Error('Zernio comment sync claim returned no status');
+  }
+  return {
+    claimed: row.claimed === true,
+    syncing: row.syncing === true,
+  };
+}
+
+/** Release a shared sync lease, recording its outcome if this worker owns it. */
+export async function finishZernioCommentSync(
+  db: SupabaseClient,
+  args: {
+    accountId: string;
+    zernioAccountId: string;
+    leaseToken: string;
+    succeeded: boolean;
+  }
+): Promise<void> {
+  const { error } = await db.rpc('finish_zernio_comment_sync', {
+    p_account_id: args.accountId,
+    p_zernio_account_id: args.zernioAccountId,
+    p_lease_token: args.leaseToken,
+    p_succeeded: args.succeeded,
+  });
+  if (error) throw error;
+}
+
 async function upsertPost(
   db: SupabaseClient,
   args: {

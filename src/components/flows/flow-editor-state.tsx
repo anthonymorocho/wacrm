@@ -88,6 +88,7 @@ export interface FlowEditorContextValue {
   dirty: boolean;
   saving: boolean;
   activating: boolean;
+  deleting: boolean;
   issues: ValidationIssue[];
   canActivate: boolean;
 
@@ -134,7 +135,24 @@ export function uniqueNodeKey(base: string, existing: BuilderNode[]): string {
   return `${base}_${i}`;
 }
 
-export function defaultConfigFor(type: NodeType): Record<string, unknown> {
+export interface DefaultNodeCopy {
+  buttonTitle: string;
+  listButtonLabel: string;
+  listOptionTitle: string;
+  variableKey: string;
+}
+
+const EN_DEFAULT_NODE_COPY: DefaultNodeCopy = {
+  buttonTitle: "Yes",
+  listButtonLabel: "View options",
+  listOptionTitle: "Option 1",
+  variableKey: "answer",
+};
+
+export function defaultConfigFor(
+  type: NodeType,
+  copy: DefaultNodeCopy = EN_DEFAULT_NODE_COPY,
+): Record<string, unknown> {
   switch (type) {
     case "start":
       return { next_node_key: "" };
@@ -143,17 +161,17 @@ export function defaultConfigFor(type: NodeType): Record<string, unknown> {
     case "send_buttons":
       return {
         text: "",
-        buttons: [{ reply_id: "yes", title: "Yes", next_node_key: "" }],
+        buttons: [{ reply_id: "yes", title: copy.buttonTitle, next_node_key: "" }],
       };
     case "send_list":
       return {
         text: "",
-        button_label: "View options",
+        button_label: copy.listButtonLabel,
         sections: [
           {
             title: "",
             rows: [
-              { reply_id: "row_1", title: "Option 1", next_node_key: "" },
+              { reply_id: "row_1", title: copy.listOptionTitle, next_node_key: "" },
             ],
           },
         ],
@@ -169,7 +187,7 @@ export function defaultConfigFor(type: NodeType): Record<string, unknown> {
     case "collect_input":
       return {
         prompt_text: "",
-        var_key: "answer",
+        var_key: copy.variableKey,
         next_node_key: "",
       };
     case "condition":
@@ -239,6 +257,7 @@ export function FlowEditorProvider({
 }: ProviderProps) {
   const router = useRouter();
   const t = useTranslations("Flows.editorState");
+  const tBuilderForm = useTranslations("Flows.builder.form");
 
   const [state, setStateRaw] = useState<BuilderState>(() => ({
     name: initialFlow.name,
@@ -258,6 +277,7 @@ export function FlowEditorProvider({
 
   const [saving, setSaving] = useState(false);
   const [activating, setActivating] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   // dirty flips on user edits; status-only updates (after the activate
   // API succeeds) use setStateRaw so they don't falsely re-flag the
   // form as dirty.
@@ -345,18 +365,17 @@ export function FlowEditorProvider({
         }),
       });
       if (!res.ok) {
-        const json = await res.json().catch(() => ({}));
-        throw new Error(json.error ?? `Save failed: ${res.status}`);
+        throw new Error(t("saveFailedStatus", { status: res.status }));
       }
       setDirty(false);
       toast.success(t("saved"));
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "Save failed";
-      toast.error(msg);
+      console.error(err);
+      toast.error(t("saveFailed"));
     } finally {
       setSaving(false);
     }
-  }, [initialFlow.id, state]);
+  }, [initialFlow.id, state, t]);
 
   // ---- Activate / Pause / Archive ----
   const setStatus = useCallback(
@@ -379,8 +398,7 @@ export function FlowEditorProvider({
           body: JSON.stringify({ status: next }),
         });
         if (!res.ok) {
-          const json = await res.json().catch(() => ({}));
-          throw new Error(json.error ?? `Status update failed: ${res.status}`);
+          throw new Error(t("statusFailedStatus", { status: res.status }));
         }
         setStateRaw((s) => ({ ...s, status: next }));
         toast.success(
@@ -391,32 +409,36 @@ export function FlowEditorProvider({
               : t("statusDraft")
         );
       } catch (err) {
-        const msg = err instanceof Error ? err.message : "Status update failed";
-        toast.error(msg);
+        console.error(err);
+        toast.error(t("statusFailed"));
       } finally {
         setActivating(false);
       }
     },
-    [canActivate, save, initialFlow.id],
+    [canActivate, save, initialFlow.id, t],
   );
 
   // ---- Delete ----
   const deleteFlow = useCallback(async () => {
-    const yes = window.confirm(
-      `Delete "${state.name}"? Any active runs end immediately. This can't be undone.`,
-    );
-    if (!yes) return;
+    if (deleting) return;
+    setDeleting(true);
     try {
       const res = await fetch(`/api/flows/${initialFlow.id}`, {
         method: "DELETE",
       });
-      if (!res.ok) throw new Error(`Delete failed: ${res.status}`);
+      if (!res.ok) {
+        throw new Error(
+          t("deleteFailedStatus", { status: res.status }),
+        );
+      }
       router.push("/flows");
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "Delete failed";
-      toast.error(msg);
+      console.error(err);
+      toast.error(t("deleteFailed"));
+    } finally {
+      setDeleting(false);
     }
-  }, [initialFlow.id, router, state.name]);
+  }, [deleting, initialFlow.id, router, t]);
 
   // ---- Node mutations ----
   const updateNode = useCallback(
@@ -483,7 +505,12 @@ export function FlowEditorProvider({
         const next: BuilderNode = {
           node_key,
           node_type: type,
-          config: defaultConfigFor(type),
+          config: defaultConfigFor(type, {
+            buttonTitle: tBuilderForm("defaultButtonTitle"),
+            listButtonLabel: tBuilderForm("defaultListButtonLabel"),
+            listOptionTitle: tBuilderForm("defaultListOptionTitle"),
+            variableKey: tBuilderForm("defaultVariableKey"),
+          }),
         };
         return {
           ...s,
@@ -497,7 +524,7 @@ export function FlowEditorProvider({
       });
       return createdKey;
     },
-    [setState],
+    [setState, tBuilderForm],
   );
 
   const removeNode = useCallback(
@@ -526,6 +553,7 @@ export function FlowEditorProvider({
       dirty,
       saving,
       activating,
+      deleting,
       issues,
       canActivate,
       addNode,
@@ -547,6 +575,7 @@ export function FlowEditorProvider({
       dirty,
       saving,
       activating,
+      deleting,
       issues,
       canActivate,
       addNode,

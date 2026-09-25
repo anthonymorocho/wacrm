@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { requireRole, toErrorResponse } from '@/lib/auth/account'
 import { supabaseAdmin } from '@/lib/flows/admin-client'
+import { localizeUnmodifiedStarterFlow } from '@/lib/flows/templates'
+import type { FlowNodeRow, FlowRow } from '@/lib/flows/types'
 
 /**
  * GET   /api/flows/[id]  — fetch one flow with its nodes.
@@ -49,7 +51,7 @@ async function requireOwnership(
 }
 
 export async function GET(
-  _request: Request,
+  request: Request,
   context: { params: Promise<{ id: string }> },
 ) {
   const { id } = await context.params
@@ -68,7 +70,13 @@ export async function GET(
   if (!flow) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 })
   }
-  return NextResponse.json({ flow, nodes: nodes ?? [] })
+  const locale = new URL(request.url).searchParams.get('locale') ?? undefined
+  const localized = localizeUnmodifiedStarterFlow(
+    flow as FlowRow,
+    (nodes ?? []) as FlowNodeRow[],
+    locale,
+  )
+  return NextResponse.json(localized ?? { flow, nodes: nodes ?? [] })
 }
 
 interface PutBody {

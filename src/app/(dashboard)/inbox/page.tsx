@@ -61,6 +61,10 @@ function InboxPageInner() {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [activeConversation, setActiveConversation] =
     useState<Conversation | null>(null);
+  const activeConversationIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    activeConversationIdRef.current = activeConversation?.id ?? null;
+  }, [activeConversation?.id]);
   const [activeContact, setActiveContact] = useState<Contact | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [whatsappConnected, setWhatsappConnected] = useState<boolean | null>(
@@ -269,10 +273,7 @@ function InboxPageInner() {
 
       if (event.eventType === 'INSERT') {
         // Add to messages if it belongs to active conversation
-        if (
-          activeConversation &&
-          newMsg.conversation_id === activeConversation.id
-        ) {
+        if (activeConversationIdRef.current === newMsg.conversation_id) {
           setMessages((prev) => {
             // Avoid duplicates
             if (prev.some((m) => m.id === newMsg.id)) return prev;
@@ -303,7 +304,7 @@ function InboxPageInner() {
               {
                 last_message_text: newMsg.content_text ?? '',
                 unread_count:
-                  activeConversation?.id === newMsg.conversation_id
+                  activeConversationIdRef.current === newMsg.conversation_id
                     ? 0
                     : current.unread_count + 1,
               }
@@ -326,7 +327,7 @@ function InboxPageInner() {
         );
       }
     },
-    [activeConversation, hydrateConversation]
+    [hydrateConversation]
   );
 
   // Handle realtime conversation events
@@ -344,7 +345,8 @@ function InboxPageInner() {
         setConversations((prev) =>
           prev.filter((item) => item.id !== deletedId)
         );
-        if (activeConversation?.id === deletedId) {
+        if (activeConversationIdRef.current === deletedId) {
+          activeConversationIdRef.current = null;
           setActiveConversation(null);
           setActiveContact(null);
           setMessages([]);
@@ -360,7 +362,8 @@ function InboxPageInner() {
         // An agent loses visibility as soon as a conversation is transferred
         // away or released. Remove it immediately, including an open thread.
         setConversations((prev) => prev.filter((item) => item.id !== conv.id));
-        if (activeConversation?.id === conv.id) {
+        if (activeConversationIdRef.current === conv.id) {
+          activeConversationIdRef.current = null;
           setActiveConversation(null);
           setActiveContact(null);
           setMessages([]);
@@ -391,7 +394,7 @@ function InboxPageInner() {
           // RIGHT NOW, so any positive value would just flicker the badge
           // back on for the ~100ms it takes for the reset effect's server
           // UPDATE to round-trip. Non-active convs take the value as-is.
-          const isActive = activeConversation?.id === conv.id;
+          const isActive = activeConversationIdRef.current === conv.id;
           setConversations((prev) => {
             const current = prev.find(
               (conversation) => conversation.id === conv.id
@@ -444,12 +447,12 @@ function InboxPageInner() {
         }
 
         // Update active conversation if it changed
-        if (activeConversation && conv.id === activeConversation.id) {
+        if (activeConversationIdRef.current === conv.id) {
           setActiveConversation((prev) => (prev ? { ...prev, ...conv } : prev));
         }
       }
     },
-    [accountRole, activeConversation, hydrateConversation, router, user?.id]
+    [accountRole, hydrateConversation, router, user?.id]
   );
 
   // Subscribe to realtime. The `isConnected` flag below feeds the
@@ -555,6 +558,7 @@ function InboxPageInner() {
       // was refreshing. This is the same guard used for URL deep links.
       if (activeConversation?.id === candidateId) return;
 
+      activeConversationIdRef.current = match.id;
       setActiveConversation(match);
       setActiveContact(match.contact ?? null);
       setMessages([]);
@@ -621,6 +625,7 @@ function InboxPageInner() {
       // when conversationId changes — so messages would stay empty until
       // the user navigated away and back. Bail out early instead.
       if (activeConversation?.id === conv.id) return;
+      activeConversationIdRef.current = conv.id;
       setActiveConversation(conv);
       setActiveContact(conv.contact ?? null);
       setMessages([]);
@@ -660,19 +665,75 @@ function InboxPageInner() {
     ]
   );
 
-  // Mobile "back" — deselect the conversation so the list pane comes
-  // back. Also clears the ?c= param so a refresh lands on the list
-  // instead of re-opening the thread the user just backed out of.
-  const handleCloseConversation = useCallback(() => {
-    setActiveConversation(null);
-    setActiveContact(null);
-    setMessages([]);
-    // Clearing the ref lets the deep-link auto-selector fire again if
-    // the user later visits /inbox?c=<same-id> — desirable UX.
-    autoSelectedConversationRef.current = null;
-    clearRememberedConversation();
-    router.replace('/inbox', { scroll: false });
-  }, [clearRememberedConversation, router]);
+  // Deselect the conversation so the list pane comes back. Also clears
+  // the ?c= param so a refresh lands on the list instead of re-opening it.
+  const handleCloseConversation = useCallback(
+    (expectedConversationId?: string) => {
+      if (
+        expectedConversationId &&
+        activeConversationIdRef.current !== expectedConversationId
+      ) {
+        return;
+      }
+      activeConversationIdRef.current = null;
+      setActiveConversation(null);
+      setActiveContact(null);
+      setMessages([]);
+      // Clearing the ref lets the deep-link auto-selector fire again if
+      // the user later visits /inbox?c=<same-id> — desirable UX.
+      autoSelectedConversationRef.current = null;
+      clearRememberedConversation();
+      router.replace('/inbox', { scroll: false });
+    },
+    [clearRememberedConversation, router]
+  );
+
+  const activeConversationId = activeConversation?.id;
+  useEffect(() => {
+    if (!activeConversationId) return;
+
+    const handleEscape = (event: KeyboardEvent) => {
+      const target = event.target;
+      if (
+        event.key !== 'Escape' ||
+        event.defaultPrevented ||
+        event.isComposing ||
+        (target instanceof Element &&
+          target.closest('[role="dialog"], [role="alertdialog"], [role="menu"]'))
+      ) {
+        return;
+      }
+      handleCloseConversation(activeConversationId);
+    };
+
+    window.addEventListener('keydown', handleEscape);
+    return () => window.removeEventListener('keydown', handleEscape);
+  }, [activeConversationId, handleCloseConversation]);
+
+  const handleMarkConversationUnread = useCallback(
+    async (conversationId: string) => {
+      const supabase = createClient();
+      const { error } = await supabase
+        .from('conversations')
+        .update({ unread_count: 1 })
+        .eq('id', conversationId);
+
+      if (error) {
+        console.error('Failed to mark conversation as unread:', error);
+        throw error;
+      }
+
+      setConversations((previous) =>
+        previous.map((conversation) =>
+          conversation.id === conversationId
+            ? { ...conversation, unread_count: 1 }
+            : conversation
+        )
+      );
+      handleCloseConversation(conversationId);
+    },
+    [handleCloseConversation]
+  );
 
   const handleMessagesLoaded = useCallback((loaded: Message[]) => {
     setMessages(loaded);
@@ -732,6 +793,7 @@ function InboxPageInner() {
             prev ? { ...prev, assigned_agent_id: nextAssignment } : prev
           );
         } else {
+          activeConversationIdRef.current = null;
           setActiveConversation(null);
           setActiveContact(null);
           setMessages([]);
@@ -778,6 +840,7 @@ function InboxPageInner() {
             user?.id ?? null
           ))
       ) {
+        activeConversationIdRef.current = null;
         setActiveContact(null);
         setMessages([]);
         router.replace('/inbox', { scroll: false });
@@ -883,6 +946,7 @@ function InboxPageInner() {
             onUpdateMessage={handleUpdateMessage}
             onStatusChange={handleStatusChange}
             onAssignChange={handleAssignChange}
+            onMarkUnread={handleMarkConversationUnread}
             onBack={handleCloseConversation}
             resyncToken={resyncToken}
             onRefresh={handleManualRefresh}

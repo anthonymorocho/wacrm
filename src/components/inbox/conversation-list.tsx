@@ -57,12 +57,6 @@ interface ConversationListProps {
   resyncToken?: number;
 }
 
-const STATUS_COLORS: Record<ConversationStatus, string> = {
-  open: 'bg-primary',
-  pending: 'bg-amber-500',
-  closed: 'bg-muted-foreground',
-};
-
 type InboxFilter = ConversationStatus | 'active' | 'queue' | 'unread';
 type AssignmentFilter = 'owned' | 'transferred';
 
@@ -806,6 +800,11 @@ function ConversationItem({
   const contact = conversation.contact;
   const displayName = contact?.name || contact?.phone || t('unknown');
   const initials = displayName.charAt(0).toUpperCase();
+  const statusLabel: Record<ConversationStatus, string> = {
+    open: t('statusOpen'),
+    pending: t('statusPending'),
+    closed: t('statusClosed'),
+  };
 
   const handleClick = useCallback(() => {
     onSelect(conversation);
@@ -874,19 +873,16 @@ function ConversationItem({
                   {conversation.unread_count}
                 </span>
               )}
-              <span
-                className={cn(
-                  'h-2 w-2 rounded-full',
-                  STATUS_COLORS[conversation.status]
-                )}
-                title={conversation.status}
-              />
             </div>
           </div>
-          <p className="text-muted-foreground/80 mt-1 truncate text-[10px]">
-            {conversation.assigned_agent_id
-              ? `${t('assignedTo')}: ${assignee?.full_name ?? t('unknown')}`
-              : t('inQueue')}
+          <p className="text-muted-foreground/80 mt-1 flex min-w-0 items-center gap-1 truncate text-[10px]">
+            <span className="shrink-0">{statusLabel[conversation.status]}</span>
+            <span aria-hidden="true">·</span>
+            <span className="truncate">
+              {conversation.assigned_agent_id
+                ? t('assignedTo') + ': ' + (assignee?.full_name ?? t('unknown'))
+                : t('inQueue')}
+            </span>
           </p>
           {getConversationAssignmentKind(conversation) === 'transferred' && (
             <span className="mt-1 inline-flex rounded-full bg-amber-500/10 px-1.5 py-0.5 text-[10px] text-amber-600 dark:text-amber-400">

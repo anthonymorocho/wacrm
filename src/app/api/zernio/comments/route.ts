@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { NextResponse } from 'next/server';
+import { after, NextResponse } from 'next/server';
 
 import { requireRole, toErrorResponse } from '@/lib/auth/account';
 import { supabaseAdmin } from '@/lib/meta/admin-client';
@@ -10,6 +10,8 @@ import {
 } from '@/lib/zernio/client';
 import type { ZernioSocialPlatform } from '@/lib/zernio/client';
 import {
+  claimZernioCommentSync,
+  finishZernioCommentSync,
   listStoredZernioComments,
   persistZernioCommentedPost,
   persistZernioCommentReply,
@@ -21,6 +23,15 @@ interface ZernioContext {
   admin: ReturnType<typeof supabaseAdmin>;
   connections: Awaited<ReturnType<typeof getZernioConnections>>;
   apiKey: string;
+}
+
+type ZernioConnection = Awaited<
+  ReturnType<typeof getZernioConnections>
+>[number];
+
+interface ZernioCommentSyncJob {
+  connection: ZernioConnection;
+  leaseToken: string;
 }
 
 async function getConfiguredContext(
@@ -51,7 +62,81 @@ function invalidMessageResponse(message: string) {
   return NextResponse.json({ error: message }, { status: 400 });
 }
 
-/** GET /api/zernio/comments — sync public comments for active channels. */
+async function syncConnectionComments(
+  context: ZernioContext,
+  connection: ZernioConnection
+) {
+  const platform = platformForProvider(connection.provider);
+  const remotePosts = await listZernioCommentedPosts({
+    apiKey: context.apiKey,
+    accountId: connection.zernio_account_id,
+    platform,
+    limit: 25,
+  });
+
+  for (const remotePost of remotePosts) {
+    if (
+      remotePost.platform !== platform ||
+      remotePost.accountId !== connection.zernio_account_id
+    ) {
+      continue;
+    }
+
+    const comments = await getZernioInboxPostComments({
+      apiKey: context.apiKey,
+      accountId: connection.zernio_account_id,
+      postId: remotePost.id,
+      limit: 100,
+    });
+    await persistZernioCommentedPost(context.admin, {
+      accountId: connection.account_id,
+      zernioAccountId: connection.zernio_account_id,
+      metaChannelId: connection.meta_channel_id,
+      post: remotePost,
+      comments: comments.comments.filter(
+        (comment) => !comment.platform || comment.platform === platform
+      ),
+    });
+  }
+}
+
+async function runZernioCommentSync(
+  context: ZernioContext,
+  jobs: ZernioCommentSyncJob[]
+) {
+  await Promise.all(
+    jobs.map(async ({ connection, leaseToken }) => {
+      let succeeded = false;
+      try {
+        await syncConnectionComments(context, connection);
+        succeeded = true;
+      } catch (error) {
+        console.error('Zernio comment sync failed', {
+          accountId: connection.account_id,
+          zernioAccountId: connection.zernio_account_id,
+          error: error instanceof Error ? error.message : error,
+        });
+      }
+
+      try {
+        await finishZernioCommentSync(context.admin, {
+          accountId: connection.account_id,
+          zernioAccountId: connection.zernio_account_id,
+          leaseToken,
+          succeeded,
+        });
+      } catch (error) {
+        console.error('Could not finish Zernio comment sync', {
+          accountId: connection.account_id,
+          zernioAccountId: connection.zernio_account_id,
+          error: error instanceof Error ? error.message : error,
+        });
+      }
+    })
+  );
+}
+
+/** GET /api/zernio/comments — return the mirror and schedule stale syncs. */
 export async function GET(request?: Request) {
   try {
     const { accountId } = await requireRole('viewer');
@@ -76,56 +161,55 @@ export async function GET(request?: Request) {
       );
     }
 
-    const posts = [];
-    for (const connection of context.connections) {
-      const platform = platformForProvider(connection.provider);
-      if (requestedPlatform && requestedPlatform !== platform) continue;
-      const remotePosts = await listZernioCommentedPosts({
-        apiKey: context.apiKey,
-        accountId: connection.zernio_account_id,
-        platform,
-        limit: 25,
-      });
-      for (const remotePost of remotePosts) {
-        if (
-          remotePost.platform !== platform ||
-          remotePost.accountId !== connection.zernio_account_id
-        )
-          continue;
-        const comments = await getZernioInboxPostComments({
-          apiKey: context.apiKey,
-          accountId: connection.zernio_account_id,
-          postId: remotePost.id,
-          limit: 100,
-        });
-        await persistZernioCommentedPost(context.admin, {
-          accountId,
-          zernioAccountId: connection.zernio_account_id,
-          metaChannelId: connection.meta_channel_id,
-          post: remotePost,
-          comments: comments.comments.filter(
-            (comment) => !comment.platform || comment.platform === platform
+    const selectedConnections = context.connections.filter(
+      (connection) =>
+        !requestedPlatform ||
+        requestedPlatform === platformForProvider(connection.provider)
+    );
+    const entries = await Promise.all(
+      selectedConnections.map(async (connection) => {
+        const leaseToken = randomUUID();
+        const [stored, sync] = await Promise.all([
+          listStoredZernioComments(context.admin, {
+            accountId,
+            zernioAccountId: connection.zernio_account_id,
+          }),
+          claimZernioCommentSync(context.admin, {
+            accountId,
+            zernioAccountId: connection.zernio_account_id,
+            leaseToken,
+          }),
+        ]);
+        const platform = platformForProvider(connection.provider);
+        return {
+          connection,
+          leaseToken,
+          sync,
+          posts: stored.filter(
+            (post) =>
+              post.account_id === accountId &&
+              post.zernio_account_id === connection.zernio_account_id &&
+              post.meta_channel_id === connection.meta_channel_id &&
+              post.platform === platform
           ),
-        });
-      }
-      const stored = await listStoredZernioComments(context.admin, {
-        accountId,
-        zernioAccountId: connection.zernio_account_id,
-      });
-      posts.push(
-        ...stored.filter(
-          (post) =>
-            post.account_id === accountId &&
-            post.zernio_account_id === connection.zernio_account_id &&
-            post.meta_channel_id === connection.meta_channel_id &&
-            post.platform === platform
-        )
-      );
-    }
+        };
+      })
+    );
+    const posts = entries.flatMap((entry) => entry.posts);
     posts.sort((left, right) =>
       (right.created_time ?? '').localeCompare(left.created_time ?? '')
     );
-    return NextResponse.json({ posts });
+    const jobs = entries
+      .filter((entry) => entry.sync.claimed)
+      .map(({ connection, leaseToken }) => ({ connection, leaseToken }));
+    if (jobs.length) {
+      after(() => runZernioCommentSync(context, jobs));
+    }
+
+    return NextResponse.json({
+      posts,
+      syncing: entries.some((entry) => entry.sync.syncing),
+    });
   } catch (error) {
     return toErrorResponse(error);
   }

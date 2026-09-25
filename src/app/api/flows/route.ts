@@ -2,7 +2,11 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { requireRole, toErrorResponse } from '@/lib/auth/account'
 import { supabaseAdmin } from '@/lib/flows/admin-client'
-import { getFlowTemplate } from '@/lib/flows/templates'
+import {
+  getFlowTemplate,
+  localizeStarterFlowMetadata,
+} from '@/lib/flows/templates'
+import type { FlowRow } from '@/lib/flows/types'
 
 /**
  * GET /api/flows — list the caller's flows.
@@ -28,7 +32,7 @@ async function requireUser(): Promise<
   return { ok: true, userId: user.id, supabase }
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   const guard = await requireUser()
   if (!guard.ok) {
     return NextResponse.json(guard.body, { status: guard.status })
@@ -42,7 +46,12 @@ export async function GET() {
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
-  return NextResponse.json({ flows: data ?? [] })
+  const locale = new URL(request.url).searchParams.get('locale') ?? undefined
+  return NextResponse.json({
+    flows: (data ?? []).map((flow) =>
+      localizeStarterFlowMetadata(flow as FlowRow, locale),
+    ),
+  })
 }
 
 export async function POST(request: Request) {
@@ -90,6 +99,7 @@ export async function POST(request: Request) {
          * provided.
          */
         template_slug?: string
+        locale?: string
       }
     | null
   if (!body) {
@@ -100,7 +110,7 @@ export async function POST(request: Request) {
 
   // -------- Template clone path --------
   if (body.template_slug) {
-    const template = getFlowTemplate(body.template_slug)
+    const template = getFlowTemplate(body.template_slug, body.locale)
     if (!template) {
       return NextResponse.json(
         { error: `Unknown template_slug "${body.template_slug}"` },

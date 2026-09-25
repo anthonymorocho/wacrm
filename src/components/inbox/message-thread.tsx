@@ -24,6 +24,7 @@ import {
   Check,
   Clock,
   ArrowLeft,
+  Mail,
   RefreshCw,
   PanelRightOpen,
   PanelRightClose,
@@ -73,6 +74,7 @@ interface MessageThreadProps {
     conversationId: string,
     assignedAgentId: string | null
   ) => void;
+  onMarkUnread: (conversationId: string) => Promise<void>;
   /**
    * On mobile, the thread is shown full-screen with the conversation list
    * hidden. This callback lets the page deselect the active conversation
@@ -165,6 +167,7 @@ export function MessageThread({
   onUpdateMessage,
   onStatusChange,
   onAssignChange,
+  onMarkUnread,
   onBack,
   resyncToken = 0,
   onRefresh,
@@ -174,6 +177,7 @@ export function MessageThread({
   const t = useTranslations('Inbox.messageThread');
   const tTimer = useTranslations('Inbox.sessionTimer');
   const tQuote = useTranslations('Inbox.replyQuote');
+  const [isMarkingUnread, setIsMarkingUnread] = useState(false);
 
   const { user, profile } = useAuth();
   const { getPresence, getRow, now } = usePresence();
@@ -433,7 +437,9 @@ export function MessageThread({
   // Guarding on hasUnread prevents the eq-update loop: once unread_count
   // is 0 the condition is false, so no further UPDATE is issued.
   useEffect(() => {
-    if (!conversationId || !hasUnread) return;
+    // Do not clear the count from the realtime update while an explicit
+    // mark-unread request is in flight; its conversation is about to close.
+    if (!conversationId || !hasUnread || isMarkingUnread) return;
     const supabase = createClient();
     supabase
       .from('conversations')
@@ -442,7 +448,7 @@ export function MessageThread({
       .then(({ error }) => {
         if (error) console.error('Failed to reset unread_count:', error);
       });
-  }, [conversationId, hasUnread]);
+  }, [conversationId, hasUnread, isMarkingUnread]);
 
   // Auto-scroll to bottom on new messages
   useEffect(() => {
@@ -650,6 +656,21 @@ export function MessageThread({
     },
     [conversation, onStatusChange]
   );
+
+  const handleMarkUnread = useCallback(async () => {
+    if (!conversation || isMarkingUnread) return;
+
+    setIsMarkingUnread(true);
+    try {
+      await onMarkUnread(conversation.id);
+      toast.success(t('markUnreadSuccess'));
+    } catch (error) {
+      console.error('Failed to mark conversation as unread:', error);
+      toast.error(t('markUnreadError'));
+    } finally {
+      setIsMarkingUnread(false);
+    }
+  }, [conversation, isMarkingUnread, onMarkUnread, t]);
 
   const handleOpenTemplates = useCallback(() => {
     setTemplateModalOpen(true);
@@ -997,6 +1018,21 @@ export function MessageThread({
               />
             </button>
           )}
+
+          <button
+            type="button"
+            onClick={() => void handleMarkUnread()}
+            disabled={isMarkingUnread}
+            aria-label={isMarkingUnread ? t('markingUnread') : t('markUnread')}
+            title={isMarkingUnread ? t('markingUnread') : t('markUnread')}
+            className="text-muted-foreground hover:bg-muted hover:text-foreground inline-flex h-7 w-7 items-center justify-center rounded-md transition-colors disabled:cursor-wait disabled:opacity-60"
+          >
+            {isMarkingUnread ? (
+              <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Mail className="h-3.5 w-3.5" />
+            )}
+          </button>
 
           {/* Status dropdown */}
           <DropdownMenu>

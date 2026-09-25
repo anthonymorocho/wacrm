@@ -62,6 +62,8 @@ interface GatedButtonProps extends Omit<ComponentProps<typeof Button>, "title"> 
   gateReason?: string;
   /** Optional fallback title for the non-gated case. */
   title?: string;
+  /** Optional localized tooltip shown when the user's role blocks the action. */
+  readOnlyMessage?: string;
   children?: ReactNode;
 }
 
@@ -69,6 +71,7 @@ export function GatedButton({
   canAct = true,
   gateReason,
   title,
+  readOnlyMessage,
   disabled,
   className,
   children,
@@ -76,7 +79,7 @@ export function GatedButton({
 }: GatedButtonProps) {
   const effectivelyDisabled = disabled || !canAct;
   const tooltip = !canAct && gateReason
-    ? `Read-only — your role can't ${gateReason}`
+    ? readOnlyMessage ?? `Read-only — your role can't ${gateReason}`
     : title;
 
   return (

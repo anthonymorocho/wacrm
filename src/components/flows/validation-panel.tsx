@@ -57,7 +57,7 @@ export function ValidationPanel() {
       </div>
       <div className="flex flex-col gap-1">
         {issues.map((i, ix) => (
-          <IssueLine key={ix} issue={i} onJump={requestFlash} t={t} />
+          <IssueLine key={ix} issue={i} onJump={requestFlash} />
         ))}
       </div>
     </div>
@@ -73,16 +73,22 @@ export function ValidationPanel() {
 export function IssueLine({
   issue,
   onJump,
-  t,
 }: {
   issue: ValidationIssue;
   onJump?: (key: string) => void;
-  t?: ReturnType<typeof useTranslations>;
 }) {
+  const t = useTranslations("Flows.validation");
   const tone =
     issue.severity === "error" ? "text-red-300" : "text-amber-300";
   const iconTone =
     issue.severity === "error" ? "text-red-400" : "text-amber-400";
+  const message =
+    issue.messageKey
+      ? t(
+          `messages.${issue.messageKey}` as Parameters<typeof t>[0],
+          issue.messageParams,
+        )
+      : issue.message;
   const body = (
     <>
       <CircleAlert className={cn("mt-0.5 h-3 w-3 shrink-0", iconTone)} />
@@ -92,7 +98,7 @@ export function IssueLine({
             {issue.node_key}
           </code>
         )}
-        {issue.message}
+        {message}
       </span>
     </>
   );
@@ -109,7 +115,7 @@ export function IssueLine({
           "flex w-full items-start gap-2 rounded-md px-2 py-1 text-left text-xs transition-colors hover:bg-muted/60",
           tone,
         )}
-        aria-label={t ? t("jumpToNode", { key: issue.node_key! }) : `Jump to node ${issue.node_key}`}
+        aria-label={t("jumpToNode", { key: issue.node_key! })}
       >
         {body}
       </button>

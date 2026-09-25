@@ -12,7 +12,7 @@ import { listFlowTemplates } from '@/lib/flows/templates'
  *
  * Available to any signed-in user. Flows is in soft-GA.
  */
-export async function GET() {
+export async function GET(request: Request) {
   const supabase = await createClient()
   const {
     data: { user },
@@ -22,7 +22,8 @@ export async function GET() {
   }
   // Shallow shape so the client gallery doesn't have to know about
   // the full node tree.
-  const templates = listFlowTemplates().map((t) => ({
+  const locale = new URL(request.url).searchParams.get("locale") ?? undefined;
+  const templates = listFlowTemplates(locale).map((t) => ({
     slug: t.slug,
     name: t.name,
     description: t.description,

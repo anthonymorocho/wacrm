@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 
 import { FlowEditorShell } from "@/components/flows/flow-editor-shell";
 import type { FlowRow, FlowNodeRow } from "@/lib/flows/types";
@@ -25,6 +25,7 @@ import type { FlowRow, FlowNodeRow } from "@/lib/flows/types";
 export default function FlowEditorPage() {
   const router = useRouter();
   const params = useParams<{ id: string }>();
+  const locale = useLocale();
   const t = useTranslations("Flows.edit");
 
   const [flow, setFlow] = useState<FlowRow | null>(null);
@@ -37,7 +38,9 @@ export default function FlowEditorPage() {
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch(`/api/flows/${params.id}`);
+        const res = await fetch(
+          `/api/flows/${params.id}?locale=${encodeURIComponent(locale)}`,
+        );
         if (res.status === 404) {
           if (!cancelled) setNotFound(true);
           return;
@@ -63,7 +66,7 @@ export default function FlowEditorPage() {
     return () => {
       cancelled = true;
     };
-  }, [params.id]);
+  }, [locale, params.id, t]);
 
   if (loading) {
     return (

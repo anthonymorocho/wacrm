@@ -45,12 +45,12 @@ import { useTranslations } from 'next-intl';
 
 interface ContactSidebarProps {
   contact: Contact | null;
-  onContactUpdated?: (contact: Contact) => void;
+  variant?: 'details' | 'quick-actions';
 }
 
 export function ContactSidebar({
   contact,
-  onContactUpdated,
+  variant = 'details',
 }: ContactSidebarProps) {
   const tSidebar = useTranslations('Inbox.sidebar');
   const tThread = useTranslations('Inbox.messageThread');
@@ -75,37 +75,50 @@ export function ContactSidebar({
   const [addPipelineOpen, setAddPipelineOpen] = useState(false);
   const [newNote, setNewNote] = useState('');
   const [addingNote, setAddingNote] = useState(false);
+  const isQuickActions = variant === 'quick-actions';
+  const addPipelineElementId = 'inbox-quick-actions-add-pipeline';
 
   const fetchContactData = useCallback(async () => {
     if (!contact) return;
 
     const supabase = createClient();
 
-    // Fetch contact data and account-scoped options in parallel. RLS keeps
+    // Only load the records used by this view. RLS keeps account-scoped
     // tags and pipelines limited to this workspace.
+    const noDataRequest = Promise.resolve({ data: null });
     const [dealsRes, notesRes, tagsRes, allTagsRes, pipelinesRes] =
       await Promise.all([
-        supabase
-          .from('deals')
-          .select('*, stage:pipeline_stages(*)')
-          .eq('contact_id', contact.id)
-          .order('created_at', { ascending: false }),
-        supabase
-          .from('contact_notes')
-          .select('*')
-          .eq('contact_id', contact.id)
-          .order('created_at', { ascending: false }),
-        supabase
-          .from('contact_tags')
-          .select('id, tag_id, tags(*)')
-          .eq('contact_id', contact.id),
-        supabase.from('tags').select('*').order('name'),
-        supabase.from('pipelines').select('*').order('created_at'),
+        isQuickActions
+          ? supabase
+              .from('deals')
+              .select('*, stage:pipeline_stages(*)')
+              .eq('contact_id', contact.id)
+              .order('created_at', { ascending: false })
+          : noDataRequest,
+        isQuickActions
+          ? noDataRequest
+          : supabase
+              .from('contact_notes')
+              .select('*')
+              .eq('contact_id', contact.id)
+              .order('created_at', { ascending: false }),
+        isQuickActions
+          ? supabase
+              .from('contact_tags')
+              .select('id, tag_id, tags(*)')
+              .eq('contact_id', contact.id)
+          : noDataRequest,
+        isQuickActions
+          ? supabase.from('tags').select('*').order('name')
+          : noDataRequest,
+        isQuickActions
+          ? supabase.from('pipelines').select('*').order('created_at')
+          : noDataRequest,
       ]);
 
     const loadedPipelines = (pipelinesRes.data ?? []) as Pipeline[];
     const pipelineIds = loadedPipelines.map((pipeline) => pipeline.id);
-    const stagesRes = pipelineIds.length
+    const stagesRes = isQuickActions && pipelineIds.length
       ? await supabase
           .from('pipeline_stages')
           .select('*')
@@ -140,7 +153,7 @@ export function ContactSidebar({
         }));
       setTags(mapped);
     }
-  }, [contact]);
+  }, [contact, isQuickActions]);
 
   // Load on contact change. setContactData/setTags run inside async
   // Supabase callbacks, not synchronously in the effect body.
@@ -210,7 +223,6 @@ export function ContactSidebar({
       try {
         if (isSelected) await deleteContactTag(contact.id, tagId);
         else await addContactTag(contact.id, tagId);
-        onContactUpdated?.({ ...contact, tags: nextTags });
       } catch (error) {
         const message =
           error instanceof Error ? error.message : tSidebar('tagUpdateFailed');
@@ -226,7 +238,6 @@ export function ContactSidebar({
       allTags,
       canEditContact,
       contact,
-      onContactUpdated,
       tags,
       tSidebar,
       updatingTagId,
@@ -330,11 +341,26 @@ export function ContactSidebar({
   const initials = displayName.charAt(0).toUpperCase();
 
   return (
-    <div className="border-border bg-card flex h-full w-full flex-col border-l 2xl:w-70">
-      <ScrollArea className="flex-1">
-        <div className="p-4">
+    <div
+      className={cn(
+        'border-border bg-card flex w-full flex-col',
+        isQuickActions ? 'shrink-0 border-b' : 'h-full border-l 2xl:w-70'
+      )}
+    >
+      <ScrollArea className={isQuickActions ? 'max-h-36' : 'flex-1'}>
+        <div
+          className={cn(
+            'p-4',
+            isQuickActions && 'grid grid-cols-1 gap-3 p-2 sm:grid-cols-2'
+          )}
+        >
           {/* Contact Info */}
-          <div className="flex flex-col items-center text-center">
+          <div
+            className={cn(
+              'flex flex-col items-center text-center',
+              isQuickActions && 'hidden'
+            )}
+          >
             <div className="bg-muted text-foreground flex h-16 w-16 items-center justify-center rounded-full text-lg font-semibold">
               {contact.avatar_url ? (
                 // eslint-disable-next-line @next/next/no-img-element
@@ -356,7 +382,7 @@ export function ContactSidebar({
           </div>
 
           {/* Phone */}
-          <div className="mt-4 space-y-2">
+          <div className={cn('mt-4 space-y-2', isQuickActions && 'hidden')}>
             <button
               onClick={handleCopyPhone}
               className="text-muted-foreground hover:bg-muted flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors"
@@ -381,10 +407,15 @@ export function ContactSidebar({
           </div>
 
           {/* Divider */}
-          <div className="border-border my-4 border-t" />
+          <div
+            className={cn(
+              'border-border my-4 border-t',
+              isQuickActions && 'hidden'
+            )}
+          />
 
           {/* Tags */}
-          <div>
+          <div className={cn(!isQuickActions && 'hidden')}>
             <div className="flex items-center justify-between px-1">
               <div className="text-muted-foreground flex items-center gap-2 text-xs font-medium tracking-wider uppercase">
                 <TagIcon className="h-3 w-3" />
@@ -399,7 +430,7 @@ export function ContactSidebar({
                 >
                   <Plus className="h-3.5 w-3.5" />
                 </PopoverTrigger>
-                <PopoverContent side="left" align="start" className="w-56">
+                <PopoverContent side="bottom" align="start" className="w-56">
                   <p className="text-popover-foreground px-1 text-xs font-medium">
                     {tSidebar('chooseTags')}
                   </p>
@@ -456,11 +487,13 @@ export function ContactSidebar({
             </div>
           </div>
 
-          {/* Divider */}
-          <div className="border-border my-4 border-t" />
-
           {/* Funnel and deals */}
-          <div>
+          <div
+            className={cn(
+              !isQuickActions && 'hidden',
+              isQuickActions && 'border-border sm:border-l sm:pl-3'
+            )}
+          >
             <div className="flex items-center justify-between px-1">
               <div className="text-muted-foreground flex items-center gap-2 text-xs font-medium tracking-wider uppercase">
                 <GitBranch className="h-3 w-3" />
@@ -475,7 +508,7 @@ export function ContactSidebar({
                     type="button"
                     onClick={() => setAddPipelineOpen((previous) => !previous)}
                     aria-expanded={addPipelineOpen}
-                    aria-controls="contact-sidebar-add-pipeline"
+                    aria-controls={addPipelineElementId}
                     aria-label={tSidebar(
                       addPipelineOpen ? 'cancelAddFunnel' : 'addAnotherFunnel'
                     )}
@@ -522,10 +555,17 @@ export function ContactSidebar({
                 deals.map((deal) => (
                   <div key={deal.id} className="bg-muted rounded-lg px-3 py-2">
                     <div className="flex items-start justify-between gap-2">
-                      <p className="text-foreground min-w-0 truncate text-sm font-medium">
+                      <p
+                        className={cn(
+                          'text-foreground min-w-0 font-medium',
+                          isQuickActions
+                            ? 'line-clamp-2 text-xs'
+                            : 'truncate text-sm'
+                        )}
+                      >
                         {deal.title}
                       </p>
-                      <span>
+                      <span className={isQuickActions ? 'hidden' : undefined}>
                         {deal.currency ?? '$'}
                         {deal.value.toLocaleString()}
                       </span>
@@ -583,7 +623,7 @@ export function ContactSidebar({
                 pipelines.length,
                 addPipelineOpen
               ) && (
-                <div id="contact-sidebar-add-pipeline">
+                <div id={addPipelineElementId}>
                   <PipelineAssignment
                     pipelines={pipelines}
                     stagesByPipeline={stagesByPipeline}
@@ -605,11 +645,8 @@ export function ContactSidebar({
             </div>
           </div>
 
-          {/* Divider */}
-          <div className="border-border my-4 border-t" />
-
           {/* Notes */}
-          <div>
+          <div className={cn(isQuickActions && 'hidden')}>
             <div className="text-muted-foreground flex items-center gap-2 px-1 text-xs font-medium tracking-wider uppercase">
               <StickyNote className="h-3 w-3" />
               {tSidebar('notes')}

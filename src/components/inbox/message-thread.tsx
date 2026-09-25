@@ -56,6 +56,7 @@ import { toast } from 'sonner';
 import { messageAuthorLabel } from '@/lib/inbox/message-authorship';
 import { renderTemplateBody } from '@/lib/whatsapp/template-message-text';
 import { ConversationChannelBadge } from './channel-badge';
+import { ContactSidebar } from './contact-sidebar';
 
 interface ReplyDraft {
   id: string;
@@ -1140,8 +1141,14 @@ export function MessageThread({
         </div>
       </div>
 
+      <ContactSidebar
+        key={`quick-actions-${contact.id}`}
+        contact={contact}
+        variant="quick-actions"
+      />
+
       {/* Messages Area */}
-      <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4">
+      <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
         {loading ? (
           <div className="flex items-center justify-center py-12">
             <div className="border-primary h-5 w-5 animate-spin rounded-full border-2 border-t-transparent" />

@@ -885,22 +885,6 @@ function InboxPageInner() {
     []
   );
 
-  const handleContactUpdated = useCallback((updatedContact: Contact) => {
-    setActiveContact(updatedContact);
-    setActiveConversation((previous) =>
-      previous && previous.contact_id === updatedContact.id
-        ? { ...previous, contact: updatedContact }
-        : previous
-    );
-    setConversations((previous) =>
-      previous.map((conversation) =>
-        conversation.contact_id === updatedContact.id
-          ? { ...conversation, contact: updatedContact }
-          : conversation
-      )
-    );
-  }, []);
-
   // On narrower screens keep the inbox to one pane at a time. Opening a
   // thread covers the dashboard shell; the back button or Escape returns
   // to the full conversation list. Wide screens retain the split view.
@@ -984,7 +968,7 @@ function InboxPageInner() {
             <ContactSidebar
               key={activeContact?.id ?? 'no-contact'}
               contact={activeContact}
-              onContactUpdated={handleContactUpdated}
+              variant="details"
             />
           </div>
         )}
@@ -1021,7 +1005,7 @@ function InboxPageInner() {
               <ContactSidebar
                 key={activeContact?.id ?? 'no-contact-drawer'}
                 contact={activeContact}
-                onContactUpdated={handleContactUpdated}
+                variant="details"
               />
             )}
           </div>

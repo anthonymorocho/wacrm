@@ -127,6 +127,25 @@ export function DealConversationSheet({
     [],
   );
 
+  const handleMarkUnread = useCallback(
+    async (conversationId: string) => {
+      const { error } = await createClient()
+        .from("conversations")
+        .update({ unread_count: 1 })
+        .eq("id", conversationId);
+
+      if (error) throw error;
+
+      // Remove the thread before it can clear unread_count again while
+      // the sheet is closing. The next open reloads the conversation.
+      setConversation(null);
+      setContact(null);
+      setMessages([]);
+      onOpenChange(false);
+    },
+    [onOpenChange],
+  );
+
   const headerLabel =
     deal?.title || contact?.name || contact?.phone || t("conversation");
 
@@ -162,6 +181,7 @@ export function DealConversationSheet({
               onUpdateMessage={handleUpdateMessage}
               onStatusChange={handleStatusChange}
               onAssignChange={handleAssignChange}
+              onMarkUnread={handleMarkUnread}
               resyncToken={resyncToken}
               onRefresh={() => setResyncToken((value) => value + 1)}
             />

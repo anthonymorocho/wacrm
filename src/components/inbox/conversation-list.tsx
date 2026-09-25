@@ -862,8 +862,11 @@ function ConversationItem({
               {timeAgo}
             </span>
           </div>
-          <div className="mt-0.5 flex items-center justify-between gap-2">
-            <p className="text-muted-foreground truncate text-xs">
+          <div className="mt-0.5 flex items-start justify-between gap-2">
+            <p
+              title={conversation.last_message_text || t('noMessagesYet')}
+              className="text-muted-foreground min-w-0 flex-1 break-words text-xs line-clamp-2"
+            >
               {conversation.last_message_text || t('noMessagesYet')}
             </p>
             <div className="flex shrink-0 items-center gap-1.5">

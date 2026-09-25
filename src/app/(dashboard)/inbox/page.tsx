@@ -21,9 +21,16 @@ import { useRealtime } from '@/hooks/use-realtime';
 import { ConversationList } from '@/components/inbox/conversation-list';
 import { MessageThread } from '@/components/inbox/message-thread';
 import { ContactSidebar } from '@/components/inbox/contact-sidebar';
-import { WifiOff } from 'lucide-react';
+import { WifiOff, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/hooks/use-auth';
+import {
+  Sheet,
+  SheetClose,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from '@/components/ui/sheet';
 import {
   clearRememberedInboxConversation,
   readRememberedInboxConversation,
@@ -48,6 +55,7 @@ export default function InboxPage() {
 
 function InboxPageInner() {
   const t = useTranslations('Inbox.page');
+  const tThread = useTranslations('Inbox.messageThread');
   const router = useRouter();
   const searchParams = useSearchParams();
   const { user, accountRole } = useAuth();
@@ -88,6 +96,7 @@ function InboxPageInner() {
    * below reconciles to the stored value right after mount instead.
    */
   const [contactPanelOpen, setContactPanelOpen] = useState(true);
+  const [contactDrawerOpen, setContactDrawerOpen] = useState(false);
   useEffect(() => {
     try {
       const stored = localStorage.getItem(CONTACT_PANEL_STORAGE_KEY);
@@ -107,6 +116,10 @@ function InboxPageInner() {
       }
       return next;
     });
+  }, []);
+
+  const handleOpenContactDrawer = useCallback(() => {
+    setContactDrawerOpen(true);
   }, []);
 
   // Fire the URL/session restore exactly once per candidate — subsequent
@@ -348,6 +361,7 @@ function InboxPageInner() {
         if (activeConversationIdRef.current === deletedId) {
           activeConversationIdRef.current = null;
           setActiveConversation(null);
+          setContactDrawerOpen(false);
           setActiveContact(null);
           setMessages([]);
           router.replace('/inbox', { scroll: false });
@@ -365,6 +379,7 @@ function InboxPageInner() {
         if (activeConversationIdRef.current === conv.id) {
           activeConversationIdRef.current = null;
           setActiveConversation(null);
+          setContactDrawerOpen(false);
           setActiveContact(null);
           setMessages([]);
           router.replace('/inbox', { scroll: false });
@@ -559,6 +574,7 @@ function InboxPageInner() {
       if (activeConversation?.id === candidateId) return;
 
       activeConversationIdRef.current = match.id;
+      setContactDrawerOpen(false);
       setActiveConversation(match);
       setActiveContact(match.contact ?? null);
       setMessages([]);
@@ -626,6 +642,7 @@ function InboxPageInner() {
       // the user navigated away and back. Bail out early instead.
       if (activeConversation?.id === conv.id) return;
       activeConversationIdRef.current = conv.id;
+      setContactDrawerOpen(false);
       setActiveConversation(conv);
       setActiveContact(conv.contact ?? null);
       setMessages([]);
@@ -677,6 +694,7 @@ function InboxPageInner() {
       }
       activeConversationIdRef.current = null;
       setActiveConversation(null);
+      setContactDrawerOpen(false);
       setActiveContact(null);
       setMessages([]);
       // Clearing the ref lets the deep-link auto-selector fire again if
@@ -795,6 +813,7 @@ function InboxPageInner() {
         } else {
           activeConversationIdRef.current = null;
           setActiveConversation(null);
+          setContactDrawerOpen(false);
           setActiveContact(null);
           setMessages([]);
           router.replace('/inbox', { scroll: false });
@@ -953,6 +972,8 @@ function InboxPageInner() {
             onRefresh={handleManualRefresh}
             contactPanelOpen={contactPanelOpen}
             onToggleContactPanel={handleToggleContactPanel}
+            contactDrawerOpen={contactDrawerOpen}
+            onOpenContactPanel={handleOpenContactDrawer}
           />
         </div>
 
@@ -968,6 +989,44 @@ function InboxPageInner() {
           </div>
         )}
       </div>
+
+      <Sheet
+        open={contactDrawerOpen && Boolean(activeConversation)}
+        onOpenChange={setContactDrawerOpen}
+      >
+        <SheetContent
+          side="right"
+          showCloseButton={false}
+          className="w-[min(90vw,17.5rem)] gap-0 border-border bg-card p-0 sm:max-w-none"
+        >
+          <SheetHeader className="flex h-12 shrink-0 flex-row items-center justify-between gap-2 border-b border-border px-3 py-2">
+            <SheetTitle className="min-w-0 truncate text-sm">
+              {activeContact?.name || activeContact?.phone || tThread('showContact')}
+            </SheetTitle>
+            <SheetClose
+              render={
+                <button
+                  type="button"
+                  aria-label={tThread('hideContactPanel')}
+                  title={tThread('hideContact')}
+                  className="text-muted-foreground hover:bg-muted hover:text-foreground flex h-8 w-8 shrink-0 items-center justify-center rounded-md"
+                />
+              }
+            >
+              <X className="h-4 w-4" />
+            </SheetClose>
+          </SheetHeader>
+          <div className="min-h-0 flex-1">
+            {contactDrawerOpen && (
+              <ContactSidebar
+                key={activeContact?.id ?? 'no-contact-drawer'}
+                contact={activeContact}
+                onContactUpdated={handleContactUpdated}
+              />
+            )}
+          </div>
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }

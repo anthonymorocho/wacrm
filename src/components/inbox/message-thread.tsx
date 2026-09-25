@@ -28,6 +28,7 @@ import {
   RefreshCw,
   PanelRightOpen,
   PanelRightClose,
+  X,
 } from 'lucide-react';
 import { format, isToday, isYesterday, differenceInHours } from 'date-fns';
 import { useTranslations } from 'next-intl';
@@ -98,15 +99,11 @@ interface MessageThreadProps {
    * working; the button is only rendered when this is provided.
    */
   onRefresh?: () => void;
-  /**
-   * Desktop-only contact-panel toggle. The page owns the open/closed
-   * state (it's the one that renders the sidebar), so the thread just
-   * reflects it and asks the page to flip it. Both optional so existing
-   * callers keep working; the toggle button only renders when
-   * `onToggleContactPanel` is wired up.
-   */
+  /** Desktop sidebar toggle and responsive contact drawer trigger. */
   contactPanelOpen?: boolean;
   onToggleContactPanel?: () => void;
+  contactDrawerOpen?: boolean;
+  onOpenContactPanel?: () => void;
 }
 
 function formatDateSeparator(
@@ -173,6 +170,8 @@ export function MessageThread({
   onRefresh,
   contactPanelOpen,
   onToggleContactPanel,
+  contactDrawerOpen,
+  onOpenContactPanel,
 }: MessageThreadProps) {
   const t = useTranslations('Inbox.messageThread');
   const tTimer = useTranslations('Inbox.sessionTimer');
@@ -933,7 +932,7 @@ export function MessageThread({
           {onBack && (
             <button
               type="button"
-              onClick={onBack}
+              onClick={() => onBack()}
               aria-label={t('backToConversations')}
               className="text-muted-foreground hover:bg-muted hover:text-foreground flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-md xl:hidden"
             >
@@ -969,11 +968,22 @@ export function MessageThread({
         </div>
 
         <div className="flex w-full shrink-0 items-center justify-end gap-1.5 sm:w-auto sm:gap-2">
-          {/* Contact-panel toggle — wide desktops only. The contact sidebar
-              eats a chunk of horizontal width that crowds the thread on
-              smaller laptops; this lets agents reclaim it when they just
-              want to read and reply. Hidden on mobile, where the sidebar
-              never renders as a permanent panel anyway. Issue #258. */}
+          {/* Narrow screens open contact details in a drawer. */}
+          {onOpenContactPanel && (
+            <button
+              type="button"
+              onClick={onOpenContactPanel}
+              aria-label={t('showContactPanel')}
+              aria-haspopup="dialog"
+              aria-expanded={contactDrawerOpen}
+              title={t('showContact')}
+              className="text-muted-foreground hover:bg-muted hover:text-foreground inline-flex h-8 w-8 items-center justify-center rounded-md transition-colors 2xl:hidden"
+            >
+              <PanelRightOpen className="h-4 w-4" />
+            </button>
+          )}
+
+          {/* Wide desktops keep contact details beside the conversation. */}
           {onToggleContactPanel && (
             <button
               type="button"

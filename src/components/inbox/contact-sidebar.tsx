@@ -317,7 +317,7 @@ export function ContactSidebar({
 
   if (!contact) {
     return (
-      <div className="border-border bg-card flex h-full w-70 items-center justify-center border-l">
+      <div className="border-border bg-card flex h-full w-full items-center justify-center border-l 2xl:w-70">
         <p className="text-muted-foreground text-sm">
           {tThread('selectConversation')}
         </p>
@@ -330,7 +330,7 @@ export function ContactSidebar({
   const initials = displayName.charAt(0).toUpperCase();
 
   return (
-    <div className="border-border bg-card flex h-full w-70 flex-col border-l">
+    <div className="border-border bg-card flex h-full w-full flex-col border-l 2xl:w-70">
       <ScrollArea className="flex-1">
         <div className="p-4">
           {/* Contact Info */}

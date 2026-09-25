@@ -20,7 +20,10 @@ import type {
 import { useRealtime } from '@/hooks/use-realtime';
 import { ConversationList } from '@/components/inbox/conversation-list';
 import { MessageThread } from '@/components/inbox/message-thread';
-import { ContactSidebar } from '@/components/inbox/contact-sidebar';
+import {
+  ContactSidebar,
+  ContactSidebarDataProvider,
+} from '@/components/inbox/contact-sidebar';
 import { WifiOff, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/hooks/use-auth';
@@ -907,27 +910,30 @@ function InboxPageInner() {
         </div>
       )}
 
-      <div className="flex flex-1 overflow-hidden">
-        {/* Keep the conversation list full-width until there is room for a
+      <ContactSidebarDataProvider
+        contact={activeContact}
+      >
+        <div className="flex flex-1 overflow-hidden">
+          {/* Keep the conversation list full-width until there is room for a
             useful split view. */}
-        <div
-          className={cn(
-            'flex h-full flex-1 xl:flex-none',
-            hasActiveConv ? 'hidden xl:flex' : 'flex'
-          )}
-        >
-          <ConversationList
-            activeConversationId={activeConversation?.id ?? null}
-            onSelect={handleSelectConversation}
-            conversations={conversations}
-            onConversationsLoaded={handleConversationsLoaded}
-            onBulkAssignChange={handleBulkAssignChange}
-            onBulkStatusChange={handleBulkStatusChange}
-            resyncToken={resyncToken}
-          />
-        </div>
+          <div
+            className={cn(
+              'flex h-full flex-1 xl:flex-none',
+              hasActiveConv ? 'hidden xl:flex' : 'flex'
+            )}
+          >
+            <ConversationList
+              activeConversationId={activeConversation?.id ?? null}
+              onSelect={handleSelectConversation}
+              conversations={conversations}
+              onConversationsLoaded={handleConversationsLoaded}
+              onBulkAssignChange={handleBulkAssignChange}
+              onBulkStatusChange={handleBulkStatusChange}
+              resyncToken={resyncToken}
+            />
+          </div>
 
-        {/* Center panel: Message thread. Hidden on narrow screens until a
+          {/* Center panel: Message thread. Hidden on narrow screens until a
             conversation is selected; wide screens keep the split view.
 
             `min-w-0` is load-bearing: without it, a single wide piece
@@ -935,82 +941,85 @@ function InboxPageInner() {
             long URL in a message body) forces the flex child past
             its share and pushes the contact-sidebar panel off-screen
             on the right. Issue #165. */}
-        <div
-          className={cn(
-            'flex h-full min-w-0 flex-1 xl:flex',
-            hasActiveConv ? 'flex' : 'hidden xl:flex'
-          )}
-        >
-          <MessageThread
-            conversation={activeConversation}
-            contact={activeContact}
-            messages={messages}
-            onMessagesLoaded={handleMessagesLoaded}
-            onNewMessage={handleNewMessage}
-            onUpdateMessage={handleUpdateMessage}
-            onStatusChange={handleStatusChange}
-            onAssignChange={handleAssignChange}
-            onMarkUnread={handleMarkConversationUnread}
-            onBack={handleCloseConversation}
-            resyncToken={resyncToken}
-            onRefresh={handleManualRefresh}
-            contactPanelOpen={contactPanelOpen}
-            onToggleContactPanel={handleToggleContactPanel}
-            contactDrawerOpen={contactDrawerOpen}
-            onOpenContactPanel={handleOpenContactDrawer}
-          />
-        </div>
-
-        {/* Reserve the contact panel for wide desktops so the list and
-            message controls stay readable at laptop widths. */}
-        {contactPanelOpen && (
-          <div className="hidden 2xl:block">
-            <ContactSidebar
-              key={activeContact?.id ?? 'no-contact'}
+          <div
+            className={cn(
+              'flex h-full min-w-0 flex-1 xl:flex',
+              hasActiveConv ? 'flex' : 'hidden xl:flex'
+            )}
+          >
+            <MessageThread
+              conversation={activeConversation}
               contact={activeContact}
-              variant="details"
+              messages={messages}
+              onMessagesLoaded={handleMessagesLoaded}
+              onNewMessage={handleNewMessage}
+              onUpdateMessage={handleUpdateMessage}
+              onStatusChange={handleStatusChange}
+              onAssignChange={handleAssignChange}
+              onMarkUnread={handleMarkConversationUnread}
+              onBack={handleCloseConversation}
+              resyncToken={resyncToken}
+              onRefresh={handleManualRefresh}
+              contactPanelOpen={contactPanelOpen}
+              onToggleContactPanel={handleToggleContactPanel}
+              contactDrawerOpen={contactDrawerOpen}
+              onOpenContactPanel={handleOpenContactDrawer}
             />
           </div>
-        )}
-      </div>
 
-      <Sheet
-        open={contactDrawerOpen && Boolean(activeConversation)}
-        onOpenChange={setContactDrawerOpen}
-      >
-        <SheetContent
-          side="right"
-          showCloseButton={false}
-          className="w-[min(90vw,17.5rem)] gap-0 border-border bg-card p-0 sm:max-w-none"
-        >
-          <SheetHeader className="flex h-12 shrink-0 flex-row items-center justify-between gap-2 border-b border-border px-3 py-2">
-            <SheetTitle className="min-w-0 truncate text-sm">
-              {activeContact?.name || activeContact?.phone || tThread('showContact')}
-            </SheetTitle>
-            <SheetClose
-              render={
-                <button
-                  type="button"
-                  aria-label={tThread('hideContactPanel')}
-                  title={tThread('hideContact')}
-                  className="text-muted-foreground hover:bg-muted hover:text-foreground flex h-8 w-8 shrink-0 items-center justify-center rounded-md"
-                />
-              }
-            >
-              <X className="h-4 w-4" />
-            </SheetClose>
-          </SheetHeader>
-          <div className="min-h-0 flex-1">
-            {contactDrawerOpen && (
+          {/* Reserve the contact panel for wide desktops so the list and
+            message controls stay readable at laptop widths. */}
+          {contactPanelOpen && (
+            <div className="hidden 2xl:block">
               <ContactSidebar
-                key={activeContact?.id ?? 'no-contact-drawer'}
+                key={activeContact?.id ?? 'no-contact'}
                 contact={activeContact}
                 variant="details"
               />
-            )}
-          </div>
-        </SheetContent>
-      </Sheet>
+            </div>
+          )}
+        </div>
+
+        <Sheet
+          open={contactDrawerOpen && Boolean(activeConversation)}
+          onOpenChange={setContactDrawerOpen}
+        >
+          <SheetContent
+            side="right"
+            showCloseButton={false}
+            className="w-[min(90vw,17.5rem)] gap-0 border-border bg-card p-0 sm:max-w-none"
+          >
+            <SheetHeader className="flex h-12 shrink-0 flex-row items-center justify-between gap-2 border-b border-border px-3 py-2">
+              <SheetTitle className="min-w-0 truncate text-sm">
+                {activeContact?.name ||
+                  activeContact?.phone ||
+                  tThread('showContact')}
+              </SheetTitle>
+              <SheetClose
+                render={
+                  <button
+                    type="button"
+                    aria-label={tThread('hideContactPanel')}
+                    title={tThread('hideContact')}
+                    className="text-muted-foreground hover:bg-muted hover:text-foreground flex h-8 w-8 shrink-0 items-center justify-center rounded-md"
+                  />
+                }
+              >
+                <X className="h-4 w-4" />
+              </SheetClose>
+            </SheetHeader>
+            <div className="min-h-0 flex-1">
+              {contactDrawerOpen && (
+                <ContactSidebar
+                  key={activeContact?.id ?? 'no-contact-drawer'}
+                  contact={activeContact}
+                  variant="details"
+                />
+              )}
+            </div>
+          </SheetContent>
+        </Sheet>
+      </ContactSidebarDataProvider>
     </div>
   );
 }

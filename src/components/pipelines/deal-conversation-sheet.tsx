@@ -16,6 +16,7 @@ import {
   normalizeConversation,
 } from "@/lib/inbox/conversations";
 import { MessageThread } from "@/components/inbox/message-thread";
+import { ContactSidebarDataProvider } from "@/components/inbox/contact-sidebar";
 import {
   Sheet,
   SheetContent,
@@ -172,19 +173,21 @@ export function DealConversationSheet({
               <span className="sr-only">{t("loading")}</span>
             </div>
           ) : conversation && contact ? (
-            <MessageThread
-              conversation={conversation}
-              contact={contact}
-              messages={messages}
-              onMessagesLoaded={handleMessagesLoaded}
-              onNewMessage={handleNewMessage}
-              onUpdateMessage={handleUpdateMessage}
-              onStatusChange={handleStatusChange}
-              onAssignChange={handleAssignChange}
-              onMarkUnread={handleMarkUnread}
-              resyncToken={resyncToken}
-              onRefresh={() => setResyncToken((value) => value + 1)}
-            />
+            <ContactSidebarDataProvider key={contact.id} contact={contact}>
+              <MessageThread
+                conversation={conversation}
+                contact={contact}
+                messages={messages}
+                onMessagesLoaded={handleMessagesLoaded}
+                onNewMessage={handleNewMessage}
+                onUpdateMessage={handleUpdateMessage}
+                onStatusChange={handleStatusChange}
+                onAssignChange={handleAssignChange}
+                onMarkUnread={handleMarkUnread}
+                resyncToken={resyncToken}
+                onRefresh={() => setResyncToken((value) => value + 1)}
+              />
+            </ContactSidebarDataProvider>
           ) : (
             <div className="flex flex-1 flex-col items-center justify-center px-8 text-center">
               <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted">

@@ -1,6 +1,15 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+} from 'react';
+import type { Dispatch, ReactNode, SetStateAction } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { useAuth } from '@/hooks/use-auth';
 import { useCan } from '@/hooks/use-can';
@@ -55,6 +64,170 @@ interface ContactSidebarProps {
   variant?: 'details' | 'quick-actions';
 }
 
+type ContactTag = Tag & { contact_tag_id: string };
+
+interface ContactSidebarData {
+  deals: Deal[];
+  setDeals: Dispatch<SetStateAction<Deal[]>>;
+  pipelines: Pipeline[];
+  stagesByPipeline: Record<string, PipelineStage[]>;
+  tags: ContactTag[];
+  setTags: Dispatch<SetStateAction<ContactTag[]>>;
+  allTags: Tag[];
+  updatingTagId: string | null;
+  setUpdatingTagId: Dispatch<SetStateAction<string | null>>;
+  savingDealId: string | null;
+  setSavingDealId: Dispatch<SetStateAction<string | null>>;
+  addingDeal: boolean;
+  setAddingDeal: Dispatch<SetStateAction<boolean>>;
+  refresh: () => Promise<void>;
+}
+
+const ContactSidebarDataContext = createContext<ContactSidebarData | null>(
+  null
+);
+
+export function ContactSidebarDataProvider({
+  contact,
+  children,
+}: {
+  contact: Contact | null;
+  children: ReactNode;
+}) {
+  const contactId = contact?.id;
+  const requestIdRef = useRef(0);
+  const currentContactIdRef = useRef(contactId);
+  const [loadedContactId, setLoadedContactId] = useState<string | null>(null);
+  const [deals, setDeals] = useState<Deal[]>([]);
+  const [pipelines, setPipelines] = useState<Pipeline[]>([]);
+  const [stagesByPipeline, setStagesByPipeline] = useState<
+    Record<string, PipelineStage[]>
+  >({});
+  const [tags, setTags] = useState<ContactTag[]>([]);
+  const [allTags, setAllTags] = useState<Tag[]>([]);
+  const [updatingTagId, setUpdatingTagId] = useState<string | null>(null);
+  const [savingDealId, setSavingDealId] = useState<string | null>(null);
+  const [addingDeal, setAddingDeal] = useState(false);
+
+  useEffect(() => {
+    currentContactIdRef.current = contactId;
+  }, [contactId]);
+
+  const refresh = useCallback(async () => {
+    if (currentContactIdRef.current !== contactId) return;
+    const requestId = ++requestIdRef.current;
+    if (!contactId) {
+      setLoadedContactId(null);
+      setDeals([]);
+      setPipelines([]);
+      setStagesByPipeline({});
+      setTags([]);
+      setAllTags([]);
+      return;
+    }
+
+    const supabase = createClient();
+    const [dealsRes, tagsRes, allTagsRes, pipelinesRes] = await Promise.all([
+      supabase
+        .from('deals')
+        .select('*, stage:pipeline_stages(*)')
+        .eq('contact_id', contactId)
+        .order('created_at', { ascending: false }),
+      supabase
+        .from('contact_tags')
+        .select('id, tag_id, tags(*)')
+        .eq('contact_id', contactId),
+      supabase.from('tags').select('*').order('name'),
+      supabase.from('pipelines').select('*').order('created_at'),
+    ]);
+
+    const loadedPipelines = (pipelinesRes.data ?? []) as Pipeline[];
+    const pipelineIds = loadedPipelines.map((pipeline) => pipeline.id);
+    const stagesRes = pipelineIds.length
+      ? await supabase
+          .from('pipeline_stages')
+          .select('*')
+          .in('pipeline_id', pipelineIds)
+          .order('position')
+      : { data: [] as PipelineStage[] };
+    const stagesMap: Record<string, PipelineStage[]> = {};
+    for (const stage of (stagesRes.data ?? []) as PipelineStage[]) {
+      (stagesMap[stage.pipeline_id] ??= []).push(stage);
+    }
+    const mappedTags = (tagsRes.data ?? [])
+      .filter((row: Record<string, unknown>) => row.tags)
+      .map((row: Record<string, unknown>) => ({
+        ...(row.tags as Tag),
+        contact_tag_id: row.id as string,
+      }));
+
+    if (
+      requestId !== requestIdRef.current ||
+      currentContactIdRef.current !== contactId
+    )
+      return;
+
+    setDeals((dealsRes.data ?? []) as Deal[]);
+    setPipelines(loadedPipelines);
+    setStagesByPipeline(stagesMap);
+    setTags(mappedTags);
+    setAllTags((allTagsRes.data ?? []) as Tag[]);
+    setLoadedContactId(contactId);
+  }, [contactId]);
+
+  useEffect(() => {
+    void refresh();
+  }, [refresh]);
+
+  const setCurrentDeals = useCallback<Dispatch<SetStateAction<Deal[]>>>(
+    (update) => {
+      if (currentContactIdRef.current === contactId) setDeals(update);
+    },
+    [contactId]
+  );
+  const setCurrentTags = useCallback<Dispatch<SetStateAction<ContactTag[]>>>(
+    (update) => {
+      if (currentContactIdRef.current === contactId) setTags(update);
+    },
+    [contactId]
+  );
+
+  const hasCurrentContactData =
+    Boolean(contactId) && loadedContactId === contactId;
+  const value: ContactSidebarData = {
+    deals: hasCurrentContactData ? deals : [],
+    setDeals: setCurrentDeals,
+    pipelines: hasCurrentContactData ? pipelines : [],
+    stagesByPipeline: hasCurrentContactData ? stagesByPipeline : {},
+    tags: hasCurrentContactData ? tags : [],
+    setTags: setCurrentTags,
+    allTags: hasCurrentContactData ? allTags : [],
+    updatingTagId,
+    setUpdatingTagId,
+    savingDealId,
+    setSavingDealId,
+    addingDeal,
+    setAddingDeal,
+    refresh,
+  };
+
+  return (
+    <ContactSidebarDataContext.Provider value={value}>
+      {children}
+    </ContactSidebarDataContext.Provider>
+  );
+}
+
+function useContactSidebarData() {
+  const data = useContext(ContactSidebarDataContext);
+  if (!data) {
+    throw new Error(
+      'ContactSidebar must be rendered inside ContactSidebarDataProvider'
+    );
+  }
+  return data;
+}
+
 export function ContactSidebar({
   contact,
   variant = 'details',
@@ -65,110 +238,57 @@ export function ContactSidebar({
 
   const { accountId } = useAuth();
   const canEditContact = useCan('send-messages');
+  const instanceId = useId();
+  const {
+    deals,
+    setDeals,
+    pipelines,
+    stagesByPipeline,
+    tags,
+    setTags,
+    allTags,
+    updatingTagId,
+    setUpdatingTagId,
+    savingDealId,
+    setSavingDealId,
+    addingDeal,
+    setAddingDeal,
+    refresh: refreshContactData,
+  } = useContactSidebarData();
   const [copied, setCopied] = useState(false);
-  const [deals, setDeals] = useState<Deal[]>([]);
-  const [pipelines, setPipelines] = useState<Pipeline[]>([]);
-  const [stagesByPipeline, setStagesByPipeline] = useState<
-    Record<string, PipelineStage[]>
-  >({});
   const [notes, setNotes] = useState<ContactNote[]>([]);
-  const [tags, setTags] = useState<(Tag & { contact_tag_id: string })[]>([]);
-  const [allTags, setAllTags] = useState<Tag[]>([]);
   const [tagsOpen, setTagsOpen] = useState(false);
-  const [updatingTagId, setUpdatingTagId] = useState<string | null>(null);
-  const [savingDealId, setSavingDealId] = useState<string | null>(null);
   const [addPipelineId, setAddPipelineId] = useState('');
   const [addStageId, setAddStageId] = useState('');
-  const [addingDeal, setAddingDeal] = useState(false);
   const [addPipelineOpen, setAddPipelineOpen] = useState(false);
   const [newNote, setNewNote] = useState('');
   const [addingNote, setAddingNote] = useState(false);
   const isQuickActions = variant === 'quick-actions';
-  const addPipelineElementId = 'inbox-quick-actions-add-pipeline';
 
-  const fetchContactData = useCallback(async () => {
-    if (!contact) return;
+  const contactId = contact?.id;
+  const addPipelineElementId = `contact-sidebar-add-pipeline-${instanceId}`;
+  const addFunnelPipelineId = addPipelineId || pipelines[0]?.id || '';
+  const addFunnelStageId =
+    addStageId || stagesByPipeline[addFunnelPipelineId]?.[0]?.id || '';
 
-    const supabase = createClient();
-
-    // Only load the records used by this view. RLS keeps account-scoped
-    // tags and pipelines limited to this workspace.
-    const noDataRequest = Promise.resolve({ data: null });
-    const [dealsRes, notesRes, tagsRes, allTagsRes, pipelinesRes] =
-      await Promise.all([
-        isQuickActions
-          ? supabase
-              .from('deals')
-              .select('*, stage:pipeline_stages(*)')
-              .eq('contact_id', contact.id)
-              .order('created_at', { ascending: false })
-          : noDataRequest,
-        isQuickActions
-          ? noDataRequest
-          : supabase
-              .from('contact_notes')
-              .select('*')
-              .eq('contact_id', contact.id)
-              .order('created_at', { ascending: false }),
-        isQuickActions
-          ? supabase
-              .from('contact_tags')
-              .select('id, tag_id, tags(*)')
-              .eq('contact_id', contact.id)
-          : noDataRequest,
-        isQuickActions
-          ? supabase.from('tags').select('*').order('name')
-          : noDataRequest,
-        isQuickActions
-          ? supabase.from('pipelines').select('*').order('created_at')
-          : noDataRequest,
-      ]);
-
-    const loadedPipelines = (pipelinesRes.data ?? []) as Pipeline[];
-    const pipelineIds = loadedPipelines.map((pipeline) => pipeline.id);
-    const stagesRes =
-      isQuickActions && pipelineIds.length
-        ? await supabase
-            .from('pipeline_stages')
-            .select('*')
-            .in('pipeline_id', pipelineIds)
-            .order('position')
-        : { data: [] as PipelineStage[] };
-    const loadedStages = (stagesRes.data ?? []) as PipelineStage[];
-    const stagesMap: Record<string, PipelineStage[]> = {};
-    for (const stage of loadedStages) {
-      (stagesMap[stage.pipeline_id] ??= []).push(stage);
-    }
-
-    if (dealsRes.data) setDeals(dealsRes.data as Deal[]);
-    setPipelines(loadedPipelines);
-    setStagesByPipeline(stagesMap);
-    const nextAddPipelineId = loadedPipelines[0]?.id ?? '';
-    setAddPipelineId(nextAddPipelineId);
-    setAddStageId((previous) => {
-      const currentStages = stagesMap[nextAddPipelineId] ?? [];
-      return currentStages.some((stage) => stage.id === previous)
-        ? previous
-        : (currentStages[0]?.id ?? '');
-    });
-    if (notesRes.data) setNotes(notesRes.data);
-    if (allTagsRes.data) setAllTags(allTagsRes.data as Tag[]);
-    if (tagsRes.data) {
-      const mapped = tagsRes.data
-        .filter((ct: Record<string, unknown>) => ct.tags)
-        .map((ct: Record<string, unknown>) => ({
-          ...(ct.tags as Tag),
-          contact_tag_id: ct.id as string,
-        }));
-      setTags(mapped);
-    }
-  }, [contact, isQuickActions]);
-
-  // Load on contact change. setContactData/setTags run inside async
-  // Supabase callbacks, not synchronously in the effect body.
   useEffect(() => {
-    fetchContactData();
-  }, [fetchContactData]);
+    if (!contactId || isQuickActions) return;
+
+    let active = true;
+    const loadNotes = async () => {
+      const { data } = await createClient()
+        .from('contact_notes')
+        .select('*')
+        .eq('contact_id', contactId)
+        .order('created_at', { ascending: false });
+      if (active && data) setNotes(data);
+    };
+    void loadNotes();
+
+    return () => {
+      active = false;
+    };
+  }, [contactId, isQuickActions]);
 
   const handleCopyPhone = useCallback(async () => {
     if (!contact?.phone) return;
@@ -285,8 +405,8 @@ export function ContactSidebar({
     if (
       !contact ||
       !accountId ||
-      !addPipelineId ||
-      !addStageId ||
+      !addFunnelPipelineId ||
+      !addFunnelStageId ||
       !canEditContact
     )
       return;
@@ -306,8 +426,8 @@ export function ContactSidebar({
         account_id: accountId,
         user_id: user.id,
         contact_id: contact.id,
-        pipeline_id: addPipelineId,
-        stage_id: addStageId,
+        pipeline_id: addFunnelPipelineId,
+        stage_id: addFunnelStageId,
         title: contact.name || contact.phone,
         value: 0,
         status: 'open',
@@ -315,16 +435,16 @@ export function ContactSidebar({
     if (error) toast.error(tSidebar('dealCreateFailed'));
     else {
       toast.success(tSidebar('dealCreated'));
-      await fetchContactData();
+      await refreshContactData();
     }
     setAddingDeal(false);
   }, [
     accountId,
-    addPipelineId,
-    addStageId,
+    addFunnelPipelineId,
+    addFunnelStageId,
     canEditContact,
     contact,
-    fetchContactData,
+    refreshContactData,
     tSidebar,
   ]);
 
@@ -422,7 +542,6 @@ export function ContactSidebar({
           {/* Tags */}
           <div
             className={cn(
-              !isQuickActions && 'hidden',
               isQuickActions &&
                 'flex min-w-0 basis-full items-center gap-2.5 md:w-fit md:max-w-[40%] md:flex-none md:basis-auto'
             )}
@@ -534,12 +653,17 @@ export function ContactSidebar({
           {/* Funnel and deals */}
           <div
             className={cn(
-              !isQuickActions && 'hidden',
+              !isQuickActions && 'border-border mt-4 border-t pt-4',
               isQuickActions &&
                 'border-border flex min-w-0 basis-full flex-wrap items-center gap-2.5 md:flex-1 md:basis-0 md:flex-nowrap md:border-l md:pl-4'
             )}
           >
-            <div className="flex shrink-0 items-center gap-2">
+            <div
+              className={cn(
+                'flex shrink-0 items-center gap-2',
+                !isQuickActions && 'w-full justify-between'
+              )}
+            >
               <div className="flex items-center gap-2">
                 <span className="bg-primary/10 grid size-8 place-items-center rounded-lg">
                   <GitBranch className="text-primary/85 h-3.5 w-3.5" />
@@ -570,9 +694,20 @@ export function ContactSidebar({
                 </button>
               )}
             </div>
-            <div className="flex min-w-0 flex-1 basis-full flex-wrap items-center justify-start gap-2 md:basis-auto">
+            <div
+              className={cn(
+                isQuickActions
+                  ? 'flex min-w-0 flex-1 basis-full flex-wrap items-center justify-start gap-2 md:basis-auto'
+                  : 'mt-3 space-y-2'
+              )}
+            >
               {deals.length === 0 ? (
-                <div className="flex min-w-0 flex-wrap items-center gap-2">
+                <div
+                  className={cn(
+                    'flex min-w-0 flex-wrap items-center gap-2',
+                    !isQuickActions && 'flex-col items-stretch'
+                  )}
+                >
                   {(!canEditContact || pipelines.length === 0) && (
                     <span className="text-muted-foreground px-1 text-xs italic">
                       {tSidebar('noDeals')}
@@ -582,8 +717,8 @@ export function ContactSidebar({
                     <PipelineAssignment
                       pipelines={pipelines}
                       stagesByPipeline={stagesByPipeline}
-                      pipelineId={addPipelineId}
-                      stageId={addStageId}
+                      pipelineId={addFunnelPipelineId}
+                      stageId={addFunnelStageId}
                       onPipelineChange={(pipelineId) => {
                         setAddPipelineId(pipelineId);
                         setAddStageId(
@@ -594,6 +729,7 @@ export function ContactSidebar({
                       onAdd={() => void handleAddToPipeline()}
                       disabled={addingDeal}
                       t={tSidebar}
+                      compact={isQuickActions}
                     />
                   )}
                 </div>
@@ -601,14 +737,36 @@ export function ContactSidebar({
                 deals.map((deal) => (
                   <div
                     key={deal.id}
-                    className="flex max-w-full shrink-0 items-center"
+                    className={cn(
+                      'max-w-full',
+                      isQuickActions
+                        ? 'flex shrink-0 items-center'
+                        : 'bg-muted rounded-lg p-3'
+                    )}
                   >
-                    <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+                    {!isQuickActions && (
+                      <div className="flex min-w-0 items-start justify-between gap-2">
+                        <p className="text-foreground min-w-0 truncate text-sm font-medium">
+                          {deal.title}
+                        </p>
+                        <span className="text-muted-foreground shrink-0 text-xs">
+                          {deal.currency ?? '$'}
+                          {deal.value.toLocaleString()}
+                        </span>
+                      </div>
+                    )}
+                    <div
+                      className={cn(
+                        'flex min-w-0 flex-wrap items-center gap-1.5',
+                        !isQuickActions && 'mt-2 flex-col items-stretch'
+                      )}
+                    >
                       <PipelineStageFields
                         pipelines={pipelines}
                         stages={stagesByPipeline[deal.pipeline_id] ?? []}
                         pipelineId={deal.pipeline_id}
                         stageId={deal.stage_id}
+                        compact={isQuickActions}
                         disabled={!canEditContact || savingDealId === deal.id}
                         pipelineLabel={`${tAutomation('pipelines.pipelineLabel')}: ${deal.title}`}
                         stageLabel={`${tAutomation('pipelines.stageLabel')}: ${deal.title}`}
@@ -634,12 +792,15 @@ export function ContactSidebar({
                 pipelines.length,
                 addPipelineOpen
               ) && (
-                <div id={addPipelineElementId}>
+                <div
+                  id={addPipelineElementId}
+                  className={cn(!isQuickActions && 'mt-2')}
+                >
                   <PipelineAssignment
                     pipelines={pipelines}
                     stagesByPipeline={stagesByPipeline}
-                    pipelineId={addPipelineId}
-                    stageId={addStageId}
+                    pipelineId={addFunnelPipelineId}
+                    stageId={addFunnelStageId}
                     onPipelineChange={(pipelineId) => {
                       setAddPipelineId(pipelineId);
                       setAddStageId(
@@ -650,6 +811,7 @@ export function ContactSidebar({
                     onAdd={() => void handleAddToPipeline()}
                     disabled={addingDeal}
                     t={tSidebar}
+                    compact={isQuickActions}
                   />
                 </div>
               )}
@@ -711,6 +873,7 @@ function PipelineAssignment({
   onAdd,
   disabled,
   t,
+  compact,
 }: {
   pipelines: Pipeline[];
   stagesByPipeline: Record<string, PipelineStage[]>;
@@ -721,11 +884,14 @@ function PipelineAssignment({
   onAdd: () => void;
   disabled: boolean;
   t: ReturnType<typeof useTranslations>;
+  compact: boolean;
 }) {
   return (
     <div
       className={cn(
-        'flex max-w-full min-w-0 flex-wrap items-center gap-2',
+        compact
+          ? 'flex max-w-full min-w-0 flex-wrap items-center gap-2'
+          : 'grid w-full min-w-0 gap-2',
         disabled && 'opacity-60'
       )}
     >
@@ -734,24 +900,29 @@ function PipelineAssignment({
         stages={stagesByPipeline[pipelineId] ?? []}
         pipelineId={pipelineId}
         stageId={stageId}
+        compact={compact}
         disabled={disabled}
         onPipelineChange={onPipelineChange}
         onStageChange={onStageChange}
       />
       <Button
         type="button"
-        size="icon"
+        size={compact ? 'icon' : 'sm'}
         aria-label={t('addToFunnel')}
         title={t('addToFunnel')}
         onClick={onAdd}
         disabled={disabled || !pipelineId || !stageId}
-        className="bg-primary text-primary-foreground shadow-primary/15 hover:bg-primary/90 size-10 shrink-0 rounded-xl shadow-sm transition-[background-color,transform] active:scale-[0.96]"
+        className={cn(
+          'bg-primary text-primary-foreground shadow-primary/15 hover:bg-primary/90 shadow-sm transition-[background-color,transform] active:scale-[0.96]',
+          compact ? 'size-10 shrink-0 rounded-xl' : 'h-9 w-full rounded-lg'
+        )}
       >
         {disabled ? (
           <Loader2 className="h-4 w-4 animate-spin" />
         ) : (
           <Plus className="h-4 w-4" />
         )}
+        {!compact && t('addToFunnel')}
       </Button>
     </div>
   );
@@ -763,6 +934,7 @@ function PipelineStageFields({
   pipelineId,
   stageId,
   disabled,
+  compact,
   pipelineLabel,
   stageLabel,
   onPipelineChange,
@@ -773,6 +945,7 @@ function PipelineStageFields({
   pipelineId: string;
   stageId: string;
   disabled: boolean;
+  compact: boolean;
   pipelineLabel?: string;
   stageLabel?: string;
   onPipelineChange: (pipelineId: string) => void;
@@ -781,7 +954,14 @@ function PipelineStageFields({
   const tAutomation = useTranslations('Automations');
 
   return (
-    <div className="bg-background/45 ring-border/60 flex max-w-full min-w-0 items-center gap-0.5 rounded-xl p-1 shadow-sm ring-1 ring-inset">
+    <div
+      className={cn(
+        'min-w-0',
+        compact
+          ? 'bg-background/45 ring-border/60 flex max-w-full items-center gap-0.5 rounded-xl p-1 shadow-sm ring-1 ring-inset'
+          : 'grid w-full gap-1.5'
+      )}
+    >
       <Select
         value={pipelineId}
         items={pipelines.map((pipeline) => ({
@@ -793,7 +973,12 @@ function PipelineStageFields({
       >
         <SelectTrigger
           aria-label={pipelineLabel ?? tAutomation('pipelines.pipelineLabel')}
-          className="hover:bg-muted/70 focus-visible:ring-primary/30 h-10 w-36 max-w-[32vw] min-w-24 rounded-lg border-transparent bg-transparent px-2.5 text-xs font-medium focus-visible:ring-2 data-[size=default]:h-10"
+          className={cn(
+            'hover:bg-muted/70 focus-visible:ring-primary/30 h-10 min-w-0 rounded-lg px-2.5 text-xs font-medium focus-visible:ring-2 data-[size=default]:h-10',
+            compact
+              ? 'w-36 max-w-[32vw] min-w-24 border-transparent bg-transparent'
+              : 'border-border bg-muted/60 w-full'
+          )}
         >
           <SelectValue className="min-w-0 truncate" />
         </SelectTrigger>
@@ -809,10 +994,12 @@ function PipelineStageFields({
           ))}
         </SelectContent>
       </Select>
-      <ChevronRight
-        aria-hidden="true"
-        className="text-muted-foreground/55 h-3.5 w-3.5 shrink-0"
-      />
+      {compact && (
+        <ChevronRight
+          aria-hidden="true"
+          className="text-muted-foreground/55 h-3.5 w-3.5 shrink-0"
+        />
+      )}
       <Select
         value={stageId}
         items={stages.map((stage) => ({
@@ -833,7 +1020,12 @@ function PipelineStageFields({
       >
         <SelectTrigger
           aria-label={stageLabel ?? tAutomation('pipelines.stageLabel')}
-          className="bg-primary/5 hover:bg-primary/10 focus-visible:ring-primary/30 h-10 w-32 max-w-[28vw] min-w-20 rounded-lg border-transparent px-2.5 text-xs font-medium focus-visible:ring-2 data-[size=default]:h-10"
+          className={cn(
+            'focus-visible:ring-primary/30 h-10 min-w-0 rounded-lg px-2.5 text-xs font-medium focus-visible:ring-2 data-[size=default]:h-10',
+            compact
+              ? 'bg-primary/5 hover:bg-primary/10 w-32 max-w-[28vw] min-w-20 border-transparent'
+              : 'border-primary/20 bg-primary/5 hover:bg-primary/10 w-full'
+          )}
         >
           <SelectValue className="min-w-0 truncate" />
         </SelectTrigger>

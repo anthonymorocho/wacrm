@@ -882,15 +882,19 @@ function InboxPageInner() {
     );
   }, []);
 
-  // On mobile (<lg) we show a SINGLE pane — either the list or the
-  // thread — rather than cramming both side-by-side. Selecting a
-  // conversation slides the thread in; the thread's back button pops
-  // it back to the list. On lg+ both panes render side-by-side as
-  // before, unchanged.
+  // On narrower screens keep the inbox to one pane at a time. Opening a
+  // thread covers the dashboard shell; the back button or Escape returns
+  // to the full conversation list. Wide screens retain the split view.
   const hasActiveConv = !!activeConversation;
 
   return (
-    <div className="-m-4 flex h-[calc(100vh-3.5rem)] flex-col overflow-hidden sm:-m-6">
+    <div
+      className={cn(
+        '-m-4 flex h-[calc(100dvh-3.5rem)] flex-col overflow-hidden sm:-m-6',
+        hasActiveConv &&
+          'fixed inset-0 z-40 m-0 h-dvh w-full bg-background sm:m-0 xl:relative xl:inset-auto xl:z-auto xl:-m-4 xl:h-[calc(100dvh-3.5rem)] xl:w-auto 2xl:-m-6'
+      )}
+    >
       {/* WhatsApp connection banner — in the flex column, not absolute,
           so it pushes the panels down instead of overlapping them. */}
       {whatsappConnected === false && (
@@ -901,13 +905,12 @@ function InboxPageInner() {
       )}
 
       <div className="flex flex-1 overflow-hidden">
-        {/* Left panel: Conversation list.
-            Hidden on mobile when a conversation is selected so the
-            thread can occupy the full width. Always visible on lg+. */}
+        {/* Keep the conversation list full-width until there is room for a
+            useful split view. */}
         <div
           className={cn(
-            'flex h-full flex-1 lg:flex-none',
-            hasActiveConv ? 'hidden lg:flex' : 'flex'
+            'flex h-full flex-1 xl:flex-none',
+            hasActiveConv ? 'hidden xl:flex' : 'flex'
           )}
         >
           <ConversationList
@@ -921,10 +924,8 @@ function InboxPageInner() {
           />
         </div>
 
-        {/* Center panel: Message thread.
-            Hidden on mobile when no conversation is selected so the
-            list can occupy the full width. Always visible on lg+
-            (shows its own empty-state if no thread is picked yet).
+        {/* Center panel: Message thread. Hidden on narrow screens until a
+            conversation is selected; wide screens keep the split view.
 
             `min-w-0` is load-bearing: without it, a single wide piece
             of content inside the thread (long quote preview, very
@@ -933,8 +934,8 @@ function InboxPageInner() {
             on the right. Issue #165. */}
         <div
           className={cn(
-            'flex h-full min-w-0 flex-1 lg:flex',
-            hasActiveConv ? 'flex' : 'hidden lg:flex'
+            'flex h-full min-w-0 flex-1 xl:flex',
+            hasActiveConv ? 'flex' : 'hidden xl:flex'
           )}
         >
           <MessageThread
@@ -955,12 +956,10 @@ function InboxPageInner() {
           />
         </div>
 
-        {/* Right panel: Contact sidebar — desktop only, and only when the
-            agent hasn't collapsed it via the thread-header toggle (#258).
-            On mobile it's always hidden (the `lg:block` below), so the
-            toggle — which is itself desktop-only — never affects it. */}
+        {/* Reserve the contact panel for wide desktops so the list and
+            message controls stay readable at laptop widths. */}
         {contactPanelOpen && (
-          <div className="hidden lg:block">
+          <div className="hidden 2xl:block">
             <ContactSidebar
               key={activeContact?.id ?? 'no-contact'}
               contact={activeContact}

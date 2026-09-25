@@ -71,7 +71,7 @@ export function AvailabilityControl() {
           : 'Receive automatic assignments'
       }
       className={cn(
-        'inline-flex h-8 items-center gap-1.5 rounded-lg border px-2.5 text-xs font-medium transition-colors disabled:cursor-wait disabled:opacity-60',
+        'inline-flex h-8 w-8 shrink-0 items-center justify-center gap-1.5 rounded-lg border px-0 text-xs font-medium transition-colors disabled:cursor-wait disabled:opacity-60 sm:w-auto sm:px-2.5',
         online
           ? 'border-primary/40 bg-primary/10 text-primary hover:bg-primary/20'
           : 'border-border bg-muted text-muted-foreground hover:text-foreground'
@@ -82,7 +82,7 @@ export function AvailabilityControl() {
       ) : (
         <Power className="size-3.5" aria-hidden />
       )}
-      <span>{online ? 'Online' : 'Offline'}</span>
+      <span className="hidden sm:inline">{online ? 'Online' : 'Offline'}</span>
     </button>
   );
 }

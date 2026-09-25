@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from 'react';
 import { useAuth } from "@/hooks/use-auth";
-import { LogOut, Menu, Settings as SettingsIcon, User } from "lucide-react";
+import { LogOut, Settings as SettingsIcon, User } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
   DropdownMenu,
@@ -37,16 +37,13 @@ function getPageTitleKey(pathname: string): string {
 }
 
 interface HeaderProps {
-  /** Wired to the shell's drawer state. Used only on mobile — the
-   *  hamburger button is hidden on lg+. */
-  onOpenSidebar?: () => void;
   /** Optional account-scoped controls rendered before the account menu. */
   rightContent?: ReactNode;
 }
 
 import { useTranslations } from "next-intl";
 
-export function Header({ onOpenSidebar, rightContent }: HeaderProps) {
+export function Header({ rightContent }: HeaderProps) {
   const t = useTranslations("Header");
   const pathname = usePathname();
   const { profile, signOut } = useAuth();
@@ -58,30 +55,21 @@ export function Header({ onOpenSidebar, rightContent }: HeaderProps) {
     "U";
 
   return (
-    <header className="border-border bg-background flex h-14 shrink-0 items-center justify-between gap-3 border-b px-4 lg:px-6">
+    <header className="border-border bg-background flex h-14 shrink-0 items-center justify-between gap-2 border-b px-2 sm:gap-3 sm:px-4 lg:px-6">
       <div className="flex min-w-0 items-center gap-2">
-        {/* Hamburger — mobile only. 44×44 hit target per Apple HIG. */}
-        <button
-          type="button"
-          onClick={onOpenSidebar}
-          aria-label={t("openMenu")}
-          className="text-muted-foreground hover:bg-muted hover:text-foreground flex h-10 w-10 items-center justify-center rounded-md transition-colors lg:hidden"
-        >
-          <Menu className="h-5 w-5" />
-        </button>
-        <h1 className="text-foreground truncate text-base font-semibold sm:text-lg">
+        <h1 className="text-foreground truncate text-sm font-semibold sm:text-lg">
           {t(titleKey as string)}
         </h1>
       </div>
 
-      <div className="flex items-center gap-1 sm:gap-2">
+      <div className="flex items-center gap-0 sm:gap-2">
         {rightContent}
         <ModeToggle />
         <LanguageToggle />
 
         <DropdownMenu>
         <DropdownMenuTrigger
-            className="hover:bg-muted/70 focus:bg-muted/70 data-popup-open:bg-muted/70 flex items-center gap-2 rounded-md px-1 py-1 transition-colors focus:outline-none sm:gap-3 sm:pr-3 sm:pl-1"
+          className="hover:bg-muted/70 focus:bg-muted/70 data-popup-open:bg-muted/70 hidden items-center gap-2 rounded-md px-1 py-1 transition-colors focus:outline-none sm:flex sm:gap-3 sm:pr-3 sm:pl-1"
           aria-label={t("openAccountMenu")}
         >
           <Avatar className="size-8">

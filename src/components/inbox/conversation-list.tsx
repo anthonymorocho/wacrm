@@ -462,10 +462,9 @@ export function ConversationList({
   const activeFilter = FILTER_OPTIONS.find((o) => o.value === filter);
 
   return (
-    // w-full on mobile so the list occupies the whole viewport when it's
-    // the single pane showing; fixed 320px on desktop where it shares the
-    // row with the thread + contact sidebar.
-    <div className="border-border bg-card flex h-full w-full flex-col border-r lg:w-80">
+    // Keep the list flexible until the screen is wide enough to share space
+    // comfortably with the message thread.
+    <div className="border-border bg-card flex h-full w-full flex-col border-r xl:w-80">
       {/* Search + Filter */}
       <div className="border-border space-y-2 border-b p-3">
         <div className="relative">

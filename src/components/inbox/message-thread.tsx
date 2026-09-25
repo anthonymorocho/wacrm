@@ -927,16 +927,15 @@ export function MessageThread({
     >
       {/* Header — solid card surface sits on top of the doodle so the
           name/avatar/dropdowns stay legible. */}
-      <div className="border-border bg-card flex items-center justify-between gap-2 border-b px-3 py-3 sm:px-4">
+      <div className="border-border bg-card flex flex-wrap items-center justify-between gap-x-2 gap-y-2 border-b px-3 py-3 sm:flex-nowrap sm:px-4">
         <div className="flex min-w-0 items-center gap-2 sm:gap-3">
-          {/* Back-to-list button — mobile only. Hidden on lg+ where the
-              conversation list is always visible next to the thread. */}
+          {/* Return to the list when the narrow-screen thread fills the page. */}
           {onBack && (
             <button
               type="button"
               onClick={onBack}
               aria-label={t('backToConversations')}
-              className="text-muted-foreground hover:bg-muted hover:text-foreground flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-md lg:hidden"
+              className="text-muted-foreground hover:bg-muted hover:text-foreground flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-md xl:hidden"
             >
               <ArrowLeft className="h-5 w-5" />
             </button>
@@ -969,8 +968,8 @@ export function MessageThread({
           </Badge>
         </div>
 
-        <div className="flex items-center gap-2">
-          {/* Contact-panel toggle — desktop only. The contact sidebar
+        <div className="flex w-full shrink-0 items-center justify-end gap-1.5 sm:w-auto sm:gap-2">
+          {/* Contact-panel toggle — wide desktops only. The contact sidebar
               eats a chunk of horizontal width that crowds the thread on
               smaller laptops; this lets agents reclaim it when they just
               want to read and reply. Hidden on mobile, where the sidebar
@@ -985,7 +984,7 @@ export function MessageThread({
               title={contactPanelOpen ? t('hideContact') : t('showContact')}
               aria-pressed={contactPanelOpen}
               className={cn(
-                'hover:bg-muted hover:text-foreground hidden h-7 w-7 items-center justify-center rounded-md transition-colors lg:inline-flex',
+                'hover:bg-muted hover:text-foreground hidden h-8 w-8 items-center justify-center rounded-md transition-colors 2xl:inline-flex',
                 contactPanelOpen ? 'text-primary' : 'text-muted-foreground'
               )}
             >
@@ -1010,7 +1009,7 @@ export function MessageThread({
               aria-label={t('refreshConversation')}
               title={t('refresh')}
               className={cn(
-                'text-muted-foreground hover:bg-muted hover:text-foreground inline-flex h-7 w-7 items-center justify-center rounded-md transition-colors disabled:opacity-60'
+                'text-muted-foreground hover:bg-muted hover:text-foreground inline-flex h-8 w-8 items-center justify-center rounded-md transition-colors disabled:opacity-60'
               )}
             >
               <RefreshCw
@@ -1025,7 +1024,7 @@ export function MessageThread({
             disabled={isMarkingUnread}
             aria-label={isMarkingUnread ? t('markingUnread') : t('markUnread')}
             title={isMarkingUnread ? t('markingUnread') : t('markUnread')}
-            className="text-muted-foreground hover:bg-muted hover:text-foreground inline-flex h-7 w-7 items-center justify-center rounded-md transition-colors disabled:cursor-wait disabled:opacity-60"
+            className="text-muted-foreground hover:bg-muted hover:text-foreground inline-flex h-8 w-8 items-center justify-center rounded-md transition-colors disabled:cursor-wait disabled:opacity-60"
           >
             {isMarkingUnread ? (
               <RefreshCw className="h-3.5 w-3.5 animate-spin" />
@@ -1038,7 +1037,7 @@ export function MessageThread({
           <DropdownMenu>
             <DropdownMenuTrigger
               className={cn(
-                'hover:bg-muted inline-flex h-7 items-center justify-center gap-1 rounded-md px-2 text-xs',
+                'hover:bg-muted inline-flex h-8 items-center justify-center gap-1 rounded-md px-2 text-xs',
                 currentStatus?.color ?? 'text-muted-foreground'
               )}
             >
@@ -1065,7 +1064,7 @@ export function MessageThread({
           <DropdownMenu>
             <DropdownMenuTrigger
               className={cn(
-                'hover:bg-muted inline-flex h-7 items-center justify-center gap-1 rounded-md px-2 text-xs',
+                'hover:bg-muted inline-flex h-8 items-center justify-center gap-1 rounded-md px-2 text-xs',
                 assignedAgentId ? 'text-primary' : 'text-muted-foreground'
               )}
             >

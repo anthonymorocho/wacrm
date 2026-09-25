@@ -52,25 +52,18 @@ describe('buildAgentWorkload', () => {
 
 describe('loadQueueCount', () => {
   it('counts only unassigned open and pending conversations in the account', async () => {
-    const builder = {
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      is: vi.fn().mockReturnThis(),
-      in: vi.fn().mockResolvedValue({ count: 4, error: null }),
-    };
     const db = {
-      from: vi.fn(() => builder),
+      rpc: vi.fn().mockResolvedValue({
+        data: [{ whatsapp: 2, messenger: 1, instagram: 1 }],
+        error: null,
+      }),
     };
 
     await expect(loadQueueCount(db as never, 'account-1')).resolves.toBe(4);
-    expect(db.from).toHaveBeenCalledWith('conversations');
-    expect(builder.select).toHaveBeenCalledWith('id', {
-      count: 'exact',
-      head: true,
+    expect(db.rpc).toHaveBeenCalledTimes(1);
+    expect(db.rpc).toHaveBeenCalledWith('get_queue_counts', {
+      p_account_id: 'account-1',
     });
-    expect(builder.eq).toHaveBeenCalledWith('account_id', 'account-1');
-    expect(builder.is).toHaveBeenCalledWith('assigned_agent_id', null);
-    expect(builder.in).toHaveBeenCalledWith('status', ['open', 'pending']);
   });
 });
 
@@ -91,27 +84,11 @@ describe('queue channel counts', () => {
   });
 
   it('loads the account queue split by channel using the active queue rules', async () => {
-    const expected = [
-      { channel: 'whatsapp', count: 10 },
-      { channel: 'messenger', count: 5 },
-      { channel: 'instagram', count: 2 },
-    ] as const;
-    const builders = expected.map(({ channel, count }) => {
-      const builder = {
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-        is: vi.fn().mockReturnThis(),
-        in: vi.fn().mockResolvedValue({ count, error: null }),
-      };
-      builder.eq.mockImplementation((field: string, value: string) => {
-        if (field === 'channel') expect(value).toBe(channel);
-        return builder;
-      });
-      return builder;
-    });
-    let builderIndex = 0;
     const db = {
-      from: vi.fn(() => builders[builderIndex++]),
+      rpc: vi.fn().mockResolvedValue({
+        data: [{ whatsapp: 10, messenger: 5, instagram: 2 }],
+        error: null,
+      }),
     };
 
     await expect(loadQueueCounts(db as never, 'account-1')).resolves.toEqual({
@@ -121,15 +98,10 @@ describe('queue channel counts', () => {
       total: 17,
     });
 
-    for (const builder of builders) {
-      expect(builder.select).toHaveBeenCalledWith('id', {
-        count: 'exact',
-        head: true,
-      });
-      expect(builder.eq).toHaveBeenCalledWith('account_id', 'account-1');
-      expect(builder.is).toHaveBeenCalledWith('assigned_agent_id', null);
-      expect(builder.in).toHaveBeenCalledWith('status', ['open', 'pending']);
-    }
+    expect(db.rpc).toHaveBeenCalledTimes(1);
+    expect(db.rpc).toHaveBeenCalledWith('get_queue_counts', {
+      p_account_id: 'account-1',
+    });
   });
 });
 

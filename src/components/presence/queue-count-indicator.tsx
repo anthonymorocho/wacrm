@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 
 import { useAuth } from "@/hooks/use-auth";
@@ -17,7 +17,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 
-const REFRESH_INTERVAL_MS = 30_000;
+const REFRESH_INTERVAL_MS = 60_000;
 
 const QUEUE_CHANNELS: ReadonlyArray<{
   key: QueueChannel;
@@ -86,34 +86,60 @@ export function QueueCountIndicator() {
   const [queueCounts, setQueueCounts] = useState<QueueCountBreakdown | null>(
     null,
   );
+  const refreshInFlight = useRef(false);
 
   const refresh = useCallback(async () => {
-    if (!accountId) return;
+    if (
+      !accountId ||
+      document.visibilityState !== "visible" ||
+      refreshInFlight.current
+    ) {
+      return;
+    }
+
+    refreshInFlight.current = true;
     try {
       const counts = await loadQueueCounts(createClient(), accountId);
       setQueueCounts(counts);
     } catch (error) {
       logQueueCountFailure("queue count failed", error);
+    } finally {
+      refreshInFlight.current = false;
     }
   }, [accountId]);
 
   useEffect(() => {
     if (!shouldShowQueueCount(profileLoading, accountId)) return;
 
-    void loadQueueCounts(createClient(), accountId)
-      .then((counts) => setQueueCounts(counts))
-      .catch((error) =>
-        logQueueCountFailure("initial queue count failed", error),
-      );
+    void refresh();
+
+    let refreshTimer: number | undefined;
     const refreshWhenVisible = () => {
-      if (document.visibilityState === "visible") void refresh();
+      if (document.visibilityState !== "visible") {
+        if (refreshTimer !== undefined) {
+          window.clearTimeout(refreshTimer);
+          refreshTimer = undefined;
+        }
+        return;
+      }
+      if (refreshTimer !== undefined) return;
+
+      // Focus and visibilitychange commonly fire together on tab return.
+      // Coalesce them into one refresh.
+      refreshTimer = window.setTimeout(() => {
+        refreshTimer = undefined;
+        void refresh();
+      }, 250);
     };
-    const interval = window.setInterval(() => void refresh(), REFRESH_INTERVAL_MS);
+    const interval = window.setInterval(() => {
+      if (document.visibilityState === "visible") void refresh();
+    }, REFRESH_INTERVAL_MS);
 
     window.addEventListener("focus", refreshWhenVisible);
     document.addEventListener("visibilitychange", refreshWhenVisible);
     return () => {
       window.clearInterval(interval);
+      if (refreshTimer !== undefined) window.clearTimeout(refreshTimer);
       window.removeEventListener("focus", refreshWhenVisible);
       document.removeEventListener("visibilitychange", refreshWhenVisible);
     };

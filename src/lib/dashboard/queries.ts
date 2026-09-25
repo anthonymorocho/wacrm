@@ -38,12 +38,6 @@ export interface QueueCountBreakdown {
   total: number
 }
 
-const QUEUE_CHANNELS: readonly QueueChannel[] = [
-  'whatsapp',
-  'messenger',
-  'instagram',
-]
-
 export function buildQueueCountBreakdown(
   counts: Partial<Record<QueueChannel, number | null>>,
 ): QueueCountBreakdown {
@@ -179,15 +173,8 @@ export async function loadQueueCount(
   db: DB,
   accountId: string,
 ): Promise<number> {
-  const { count, error } = await db
-    .from('conversations')
-    .select('id', { count: 'exact', head: true })
-    .eq('account_id', accountId)
-    .is('assigned_agent_id', null)
-    .in('status', ['open', 'pending']);
-
-  if (error) throw error;
-  return count ?? 0;
+  const counts = await loadQueueCounts(db, accountId);
+  return counts.total;
 }
 
 /** Load the queued conversation count split by Inbox channel. */
@@ -195,40 +182,21 @@ export async function loadQueueCounts(
   db: DB,
   accountId: string,
 ): Promise<QueueCountBreakdown> {
-  const entries = await Promise.all(
-    QUEUE_CHANNELS.map(async (channel) => {
-      try {
-        const { count, error } = await db
-          .from('conversations')
-          .select('id', { count: 'exact', head: true })
-          .eq('account_id', accountId)
-          .is('assigned_agent_id', null)
-          .eq('channel', channel)
-          .in('status', ['open', 'pending'])
+  const { data, error } = await db.rpc('get_queue_counts', {
+    p_account_id: accountId,
+  })
 
-        if (error) throw error
-        return [channel, count ?? 0] as const
-      } catch (cause) {
-        const details =
-          cause && typeof cause === 'object'
-            ? (cause as Record<string, unknown>)
-            : {};
-        const message =
-          typeof details.message === 'string' && details.message
-            ? details.message
-            : String(cause);
-        throw Object.assign(new Error(message), {
-          channel,
-          code: details.code,
-          details: details.details,
-          hint: details.hint,
-          status: details.status,
-        });
-      }
-    }),
-  )
+  if (error) throw error
 
-  return buildQueueCountBreakdown(Object.fromEntries(entries))
+  const row = Array.isArray(data)
+    ? (data[0] as Record<string, number | string | null> | undefined)
+    : undefined
+
+  return buildQueueCountBreakdown({
+    whatsapp: Number(row?.whatsapp ?? 0),
+    messenger: Number(row?.messenger ?? 0),
+    instagram: Number(row?.instagram ?? 0),
+  })
 }
 
 // --- 1. Metric cards ---------------------------------------------------

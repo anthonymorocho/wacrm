@@ -26,9 +26,9 @@ import {
   Copy,
   Check,
   Tag as TagIcon,
-  DollarSign,
   StickyNote,
   Plus,
+  ChevronRight,
   GitBranch,
   Loader2,
   X,
@@ -40,6 +40,13 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { format } from 'date-fns';
 import { useTranslations } from 'next-intl';
 
@@ -54,6 +61,7 @@ export function ContactSidebar({
 }: ContactSidebarProps) {
   const tSidebar = useTranslations('Inbox.sidebar');
   const tThread = useTranslations('Inbox.messageThread');
+  const tAutomation = useTranslations('Automations');
 
   const { accountId } = useAuth();
   const canEditContact = useCan('send-messages');
@@ -118,13 +126,14 @@ export function ContactSidebar({
 
     const loadedPipelines = (pipelinesRes.data ?? []) as Pipeline[];
     const pipelineIds = loadedPipelines.map((pipeline) => pipeline.id);
-    const stagesRes = isQuickActions && pipelineIds.length
-      ? await supabase
-          .from('pipeline_stages')
-          .select('*')
-          .in('pipeline_id', pipelineIds)
-          .order('position')
-      : { data: [] as PipelineStage[] };
+    const stagesRes =
+      isQuickActions && pipelineIds.length
+        ? await supabase
+            .from('pipeline_stages')
+            .select('*')
+            .in('pipeline_id', pipelineIds)
+            .order('position')
+        : { data: [] as PipelineStage[] };
     const loadedStages = (stagesRes.data ?? []) as PipelineStage[];
     const stagesMap: Record<string, PipelineStage[]> = {};
     for (const stage of loadedStages) {
@@ -234,14 +243,7 @@ export function ContactSidebar({
         setUpdatingTagId(null);
       }
     },
-    [
-      allTags,
-      canEditContact,
-      contact,
-      tags,
-      tSidebar,
-      updatingTagId,
-    ]
+    [allTags, canEditContact, contact, tags, tSidebar, updatingTagId]
   );
 
   const updateDeal = useCallback(
@@ -344,14 +346,17 @@ export function ContactSidebar({
     <div
       className={cn(
         'border-border bg-card flex w-full flex-col',
-        isQuickActions ? 'shrink-0 border-b' : 'h-full border-l 2xl:w-70'
+        isQuickActions
+          ? 'bg-card/85 shrink-0 border-b shadow-[0_1px_0_rgba(255,255,255,0.025)]'
+          : 'h-full border-l 2xl:w-70'
       )}
     >
-      <ScrollArea className={isQuickActions ? 'max-h-36' : 'flex-1'}>
+      <ScrollArea className={isQuickActions ? 'max-h-32' : 'flex-1'}>
         <div
           className={cn(
             'p-4',
-            isQuickActions && 'grid grid-cols-1 gap-3 p-2 sm:grid-cols-2'
+            isQuickActions &&
+              'flex flex-wrap items-center gap-x-5 gap-y-2 px-3 py-2.5 lg:flex-nowrap lg:px-4'
           )}
         >
           {/* Contact Info */}
@@ -415,16 +420,33 @@ export function ContactSidebar({
           />
 
           {/* Tags */}
-          <div className={cn(!isQuickActions && 'hidden')}>
-            <div className="flex items-center justify-between px-1">
-              <div className="text-muted-foreground flex items-center gap-2 text-xs font-medium tracking-wider uppercase">
-                <TagIcon className="h-3 w-3" />
-                {tSidebar('tags')}
+          <div
+            className={cn(
+              !isQuickActions && 'hidden',
+              isQuickActions &&
+                'flex min-w-0 basis-full items-center gap-2.5 lg:flex-1'
+            )}
+          >
+            <div
+              className={cn(
+                'flex items-center justify-between px-1',
+                isQuickActions && 'shrink-0 gap-2 px-0'
+              )}
+            >
+              <div className="flex items-center gap-2">
+                <span className="bg-primary/10 grid size-8 place-items-center rounded-lg">
+                  <TagIcon className="text-primary/85 h-3.5 w-3.5" />
+                </span>
+                <span className="text-muted-foreground text-[11px] font-semibold tracking-[0.1em] uppercase">
+                  {tSidebar('tags')}
+                </span>
               </div>
               <Popover open={tagsOpen} onOpenChange={setTagsOpen}>
                 <PopoverTrigger
                   disabled={!canEditContact || allTags.length === 0}
-                  className="text-muted-foreground hover:bg-muted hover:text-foreground flex h-5 w-5 items-center justify-center rounded disabled:pointer-events-none disabled:opacity-40"
+                  className={cn(
+                    'text-muted-foreground hover:border-primary/30 hover:bg-primary/10 hover:text-primary border-border/70 bg-background/55 flex size-10 shrink-0 items-center justify-center rounded-xl border shadow-sm transition-[background-color,border-color,color,transform] active:scale-[0.96] disabled:pointer-events-none disabled:opacity-40'
+                  )}
                   aria-label={tSidebar('addTag')}
                   title={tSidebar('addTag')}
                 >
@@ -443,7 +465,7 @@ export function ContactSidebar({
                           type="button"
                           onClick={() => void handleToggleTag(tag.id)}
                           disabled={updatingTagId === tag.id}
-                          className="text-popover-foreground hover:bg-muted flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs disabled:opacity-50"
+                          className="text-popover-foreground hover:bg-muted flex min-h-10 w-full items-center gap-2 rounded-lg px-2.5 text-left text-xs disabled:opacity-50"
                         >
                           <span
                             className="h-2 w-2 shrink-0 rounded-full"
@@ -462,9 +484,14 @@ export function ContactSidebar({
                 </PopoverContent>
               </Popover>
             </div>
-            <div className="mt-2 flex flex-wrap gap-1">
+            <div
+              className={cn(
+                'mt-2 flex flex-wrap gap-1',
+                isQuickActions && 'mt-0 min-w-0 flex-1 items-center gap-1.5'
+              )}
+            >
               {tags.length === 0 ? (
-                <p className="text-muted-foreground px-1 text-xs">
+                <p className="text-muted-foreground px-1 text-xs italic">
                   {tSidebar('noTags')}
                 </p>
               ) : (
@@ -474,13 +501,30 @@ export function ContactSidebar({
                     type="button"
                     onClick={() => void handleToggleTag(tag.id)}
                     disabled={!canEditContact || updatingTagId === tag.id}
-                    className="rounded-full px-2 py-0.5 text-[10px] font-medium"
+                    className={cn(
+                      'rounded-full px-2 py-0.5 text-[10px] font-medium',
+                      isQuickActions &&
+                        'inline-flex h-10 items-center gap-1.5 rounded-xl border px-3 text-xs font-medium shadow-sm transition-[filter,transform] hover:brightness-110 active:scale-[0.96] disabled:cursor-not-allowed'
+                    )}
                     style={{
                       backgroundColor: `${tag.color}20`,
                       color: tag.color,
+                      ...(isQuickActions
+                        ? { borderColor: `${tag.color}45` }
+                        : {}),
                     }}
                   >
+                    {isQuickActions && (
+                      <span
+                        aria-hidden="true"
+                        className="size-1.5 shrink-0 rounded-full"
+                        style={{ backgroundColor: tag.color }}
+                      />
+                    )}
                     {tag.name}
+                    {isQuickActions && canEditContact && (
+                      <X className="ml-1 inline h-3 w-3 opacity-70" />
+                    )}
                   </button>
                 ))
               )}
@@ -491,47 +535,49 @@ export function ContactSidebar({
           <div
             className={cn(
               !isQuickActions && 'hidden',
-              isQuickActions && 'border-border sm:border-l sm:pl-3'
+              isQuickActions &&
+                'border-border flex min-w-0 basis-full flex-wrap items-center gap-2.5 lg:flex-[1.25] lg:flex-nowrap lg:border-l lg:pl-4'
             )}
           >
-            <div className="flex items-center justify-between px-1">
-              <div className="text-muted-foreground flex items-center gap-2 text-xs font-medium tracking-wider uppercase">
-                <GitBranch className="h-3 w-3" />
-                {tSidebar('funnels')}
+            <div className="flex shrink-0 items-center gap-2">
+              <div className="flex items-center gap-2">
+                <span className="bg-primary/10 grid size-8 place-items-center rounded-lg">
+                  <GitBranch className="text-primary/85 h-3.5 w-3.5" />
+                </span>
+                <span className="text-muted-foreground text-[11px] font-semibold tracking-[0.1em] uppercase">
+                  {tSidebar('funnels')}
+                </span>
               </div>
-              <div className="flex items-center gap-1.5">
-                {deals.length > 0 && (
-                  <DollarSign className="text-muted-foreground h-3 w-3" />
-                )}
-                {deals.length > 0 && canEditContact && pipelines.length > 0 && (
-                  <button
-                    type="button"
-                    onClick={() => setAddPipelineOpen((previous) => !previous)}
-                    aria-expanded={addPipelineOpen}
-                    aria-controls={addPipelineElementId}
-                    aria-label={tSidebar(
-                      addPipelineOpen ? 'cancelAddFunnel' : 'addAnotherFunnel'
-                    )}
-                    title={tSidebar(
-                      addPipelineOpen ? 'cancelAddFunnel' : 'addAnotherFunnel'
-                    )}
-                    className="text-muted-foreground hover:bg-muted hover:text-foreground flex h-5 w-5 items-center justify-center rounded"
-                  >
-                    {addPipelineOpen ? (
-                      <X className="h-3.5 w-3.5" />
-                    ) : (
-                      <Plus className="h-3.5 w-3.5" />
-                    )}
-                  </button>
-                )}
-              </div>
+              {deals.length > 0 && canEditContact && pipelines.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setAddPipelineOpen((previous) => !previous)}
+                  aria-expanded={addPipelineOpen}
+                  aria-controls={addPipelineElementId}
+                  aria-label={tSidebar(
+                    addPipelineOpen ? 'cancelAddFunnel' : 'addAnotherFunnel'
+                  )}
+                  title={tSidebar(
+                    addPipelineOpen ? 'cancelAddFunnel' : 'addAnotherFunnel'
+                  )}
+                  className="text-muted-foreground hover:border-primary/30 hover:bg-primary/10 hover:text-primary border-border/70 bg-background/55 flex size-10 items-center justify-center rounded-xl border shadow-sm transition-[background-color,border-color,color,transform] active:scale-[0.96]"
+                >
+                  {addPipelineOpen ? (
+                    <X className="h-4 w-4" />
+                  ) : (
+                    <Plus className="h-4 w-4" />
+                  )}
+                </button>
+              )}
             </div>
-            <div className="mt-2 space-y-2">
+            <div className="flex min-w-0 flex-1 basis-full flex-wrap items-center justify-start gap-2 lg:basis-auto">
               {deals.length === 0 ? (
-                <div className="space-y-2">
-                  <p className="text-muted-foreground px-1 text-xs">
-                    {tSidebar('noDeals')}
-                  </p>
+                <div className="flex min-w-0 flex-wrap items-center gap-2">
+                  {(!canEditContact || pipelines.length === 0) && (
+                    <span className="text-muted-foreground px-1 text-xs italic">
+                      {tSidebar('noDeals')}
+                    </span>
+                  )}
                   {canEditContact && pipelines.length > 0 && (
                     <PipelineAssignment
                       pipelines={pipelines}
@@ -553,66 +599,37 @@ export function ContactSidebar({
                 </div>
               ) : (
                 deals.map((deal) => (
-                  <div key={deal.id} className="bg-muted rounded-lg px-3 py-2">
-                    <div className="flex items-start justify-between gap-2">
-                      <p
-                        className={cn(
-                          'text-foreground min-w-0 font-medium',
-                          isQuickActions
-                            ? 'line-clamp-2 text-xs'
-                            : 'truncate text-sm'
-                        )}
-                      >
-                        {deal.title}
-                      </p>
-                      <span className={isQuickActions ? 'hidden' : undefined}>
-                        {deal.currency ?? '$'}
-                        {deal.value.toLocaleString()}
-                      </span>
-                    </div>
-                    <div className="mt-2 grid gap-1.5">
-                      <select
-                        value={deal.pipeline_id}
+                  <div
+                    key={deal.id}
+                    className="flex max-w-full shrink-0 items-center gap-2"
+                  >
+                    <span
+                      title={deal.title}
+                      className="text-muted-foreground max-w-20 truncate text-[11px] font-medium lg:max-w-28"
+                    >
+                      {deal.title}
+                    </span>
+                    <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+                      <PipelineStageFields
+                        pipelines={pipelines}
+                        stages={stagesByPipeline[deal.pipeline_id] ?? []}
+                        pipelineId={deal.pipeline_id}
+                        stageId={deal.stage_id}
                         disabled={!canEditContact || savingDealId === deal.id}
-                        onChange={(event) => {
-                          const pipelineId = event.target.value;
+                        pipelineLabel={`${tAutomation('pipelines.pipelineLabel')}: ${deal.title}`}
+                        stageLabel={`${tAutomation('pipelines.stageLabel')}: ${deal.title}`}
+                        onPipelineChange={(pipelineId) => {
                           const stageId = stagesByPipeline[pipelineId]?.[0]?.id;
                           if (stageId)
                             void updateDeal(deal, pipelineId, stageId);
                         }}
-                        className="border-border bg-background text-foreground focus:border-primary h-7 w-full rounded-md border px-2 text-[11px] outline-none disabled:opacity-50"
-                      >
-                        {pipelines.map((pipeline) => (
-                          <option key={pipeline.id} value={pipeline.id}>
-                            {pipeline.name}
-                          </option>
-                        ))}
-                      </select>
-                      <div className="flex items-center gap-1.5">
-                        <select
-                          value={deal.stage_id}
-                          disabled={!canEditContact || savingDealId === deal.id}
-                          onChange={(event) =>
-                            void updateDeal(
-                              deal,
-                              deal.pipeline_id,
-                              event.target.value
-                            )
-                          }
-                          className="border-border bg-background text-foreground focus:border-primary h-7 min-w-0 flex-1 rounded-md border px-2 text-[11px] outline-none disabled:opacity-50"
-                        >
-                          {(stagesByPipeline[deal.pipeline_id] ?? []).map(
-                            (stage) => (
-                              <option key={stage.id} value={stage.id}>
-                                {stage.name}
-                              </option>
-                            )
-                          )}
-                        </select>
-                        {savingDealId === deal.id && (
-                          <Loader2 className="text-primary h-3.5 w-3.5 animate-spin" />
-                        )}
-                      </div>
+                        onStageChange={(stageId) =>
+                          void updateDeal(deal, deal.pipeline_id, stageId)
+                        }
+                      />
+                      {savingDealId === deal.id && (
+                        <Loader2 className="text-primary h-3.5 w-3.5 animate-spin" />
+                      )}
                     </div>
                   </div>
                 ))
@@ -711,54 +728,117 @@ function PipelineAssignment({
   disabled: boolean;
   t: ReturnType<typeof useTranslations>;
 }) {
-  const stages = stagesByPipeline[pipelineId] ?? [];
   return (
     <div
       className={cn(
-        'border-border rounded-lg border border-dashed p-2',
+        'flex max-w-full min-w-0 flex-wrap items-center gap-2',
         disabled && 'opacity-60'
       )}
     >
-      <div className="grid gap-1.5">
-        <select
-          value={pipelineId}
-          onChange={(event) => onPipelineChange(event.target.value)}
-          disabled={disabled}
-          className="border-border bg-muted text-foreground focus:border-primary h-7 w-full rounded-md border px-2 text-[11px] outline-none disabled:cursor-not-allowed"
+      <PipelineStageFields
+        pipelines={pipelines}
+        stages={stagesByPipeline[pipelineId] ?? []}
+        pipelineId={pipelineId}
+        stageId={stageId}
+        disabled={disabled}
+        onPipelineChange={onPipelineChange}
+        onStageChange={onStageChange}
+      />
+      <Button
+        type="button"
+        size="icon"
+        aria-label={t('addToFunnel')}
+        title={t('addToFunnel')}
+        onClick={onAdd}
+        disabled={disabled || !pipelineId || !stageId}
+        className="bg-primary text-primary-foreground shadow-primary/15 hover:bg-primary/90 size-10 shrink-0 rounded-xl shadow-sm transition-[background-color,transform] active:scale-[0.96]"
+      >
+        {disabled ? (
+          <Loader2 className="h-4 w-4 animate-spin" />
+        ) : (
+          <Plus className="h-4 w-4" />
+        )}
+      </Button>
+    </div>
+  );
+}
+
+function PipelineStageFields({
+  pipelines,
+  stages,
+  pipelineId,
+  stageId,
+  disabled,
+  pipelineLabel,
+  stageLabel,
+  onPipelineChange,
+  onStageChange,
+}: {
+  pipelines: Pipeline[];
+  stages: PipelineStage[];
+  pipelineId: string;
+  stageId: string;
+  disabled: boolean;
+  pipelineLabel?: string;
+  stageLabel?: string;
+  onPipelineChange: (pipelineId: string) => void;
+  onStageChange: (stageId: string) => void;
+}) {
+  const tAutomation = useTranslations('Automations');
+
+  return (
+    <div className="bg-background/45 ring-border/60 flex max-w-full min-w-0 items-center gap-0.5 rounded-xl p-1 shadow-sm ring-1 ring-inset">
+      <Select
+        value={pipelineId}
+        onValueChange={(value) => value && onPipelineChange(value)}
+        disabled={disabled}
+      >
+        <SelectTrigger
+          aria-label={pipelineLabel ?? tAutomation('pipelines.pipelineLabel')}
+          className="hover:bg-muted/70 focus-visible:ring-primary/30 h-10 w-36 max-w-[32vw] min-w-24 rounded-lg border-transparent bg-transparent px-2.5 text-xs font-medium focus-visible:ring-2 data-[size=default]:h-10"
         >
+          <SelectValue className="min-w-0 truncate" />
+        </SelectTrigger>
+        <SelectContent align="start" className="border-border bg-popover">
           {pipelines.map((pipeline) => (
-            <option key={pipeline.id} value={pipeline.id}>
+            <SelectItem
+              key={pipeline.id}
+              value={pipeline.id}
+              className="min-h-10"
+            >
               {pipeline.name}
-            </option>
+            </SelectItem>
           ))}
-        </select>
-        <select
-          value={stageId}
-          onChange={(event) => onStageChange(event.target.value)}
-          disabled={disabled || stages.length === 0}
-          className="border-border bg-muted text-foreground focus:border-primary h-7 w-full rounded-md border px-2 text-[11px] outline-none disabled:cursor-not-allowed"
+        </SelectContent>
+      </Select>
+      <ChevronRight
+        aria-hidden="true"
+        className="text-muted-foreground/55 h-3.5 w-3.5 shrink-0"
+      />
+      <Select
+        value={stageId}
+        onValueChange={(value) => value && onStageChange(value)}
+        disabled={disabled || stages.length === 0}
+      >
+        <SelectTrigger
+          aria-label={stageLabel ?? tAutomation('pipelines.stageLabel')}
+          className="bg-primary/5 hover:bg-primary/10 focus-visible:ring-primary/30 h-10 w-32 max-w-[28vw] min-w-20 rounded-lg border-transparent px-2.5 text-xs font-medium focus-visible:ring-2 data-[size=default]:h-10"
         >
+          <SelectValue className="min-w-0 truncate" />
+        </SelectTrigger>
+        <SelectContent align="end" className="border-border bg-popover">
           {stages.map((stage) => (
-            <option key={stage.id} value={stage.id}>
+            <SelectItem key={stage.id} value={stage.id} className="min-h-10">
+              <span
+                aria-hidden="true"
+                className="size-2 shrink-0 rounded-full"
+                style={{ backgroundColor: stage.color }}
+              />
               {stage.name}
-            </option>
+            </SelectItem>
           ))}
-        </select>
-        <Button
-          type="button"
-          size="sm"
-          onClick={onAdd}
-          disabled={disabled || !pipelineId || !stageId}
-          className="bg-primary text-primary-foreground hover:bg-primary/90 h-7 px-2 text-[11px]"
-        >
-          {disabled ? (
-            <Loader2 className="mr-1 h-3 w-3 animate-spin" />
-          ) : (
-            <Plus className="mr-1 h-3 w-3" />
-          )}
-          {t('addToFunnel')}
-        </Button>
-      </div>
+        </SelectContent>
+      </Select>
     </div>
   );
 }

@@ -13,6 +13,7 @@ import type {
   AgentWorkloadBundle,
   ConversationsSeriesPoint,
   MetricsBundle,
+  MyConversationAssignmentStats,
   PipelineDonutData,
   PipelineStageSlice,
   ResponseTimeBucket,
@@ -197,6 +198,33 @@ export async function loadQueueCounts(
     messenger: Number(row?.messenger ?? 0),
     instagram: Number(row?.instagram ?? 0),
   })
+}
+
+/** Load this user's current and local-day conversation assignment counts. */
+export async function loadMyConversationAssignmentStats(
+  db: DB,
+  todayStart: string,
+): Promise<MyConversationAssignmentStats> {
+  const { data, error } = await db.rpc(
+    'get_my_conversation_assignment_stats',
+    { p_today_start: todayStart },
+  );
+
+  if (error) throw error;
+
+  const row = Array.isArray(data)
+    ? (data[0] as Record<string, unknown> | undefined)
+    : undefined;
+  const count = (value: unknown) => {
+    const parsed = Number(value ?? 0);
+    return Number.isFinite(parsed) ? parsed : 0;
+  };
+
+  return {
+    currentlyAssigned: count(row?.currently_assigned),
+    assignedToday: count(row?.assigned_today),
+    transferredToday: count(row?.transferred_today),
+  };
 }
 
 // --- 1. Metric cards ---------------------------------------------------

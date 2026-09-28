@@ -31,6 +31,12 @@ export interface AgentWorkloadBundle {
   queueCount: number;
 }
 
+export interface MyConversationAssignmentStats {
+  currentlyAssigned: number;
+  assignedToday: number;
+  transferredToday: number;
+}
+
 export interface ConversationsSeriesPoint {
   day: string; // YYYY-MM-DD local
   incoming: number

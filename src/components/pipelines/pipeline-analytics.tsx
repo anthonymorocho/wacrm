@@ -53,7 +53,7 @@ export function PipelineAnalytics({ deals }: PipelineAnalyticsProps) {
 
   return (
     <TooltipProvider>
-      <div className="grid grid-cols-2 gap-3 rounded-xl border border-border bg-card/60 p-4 sm:grid-cols-3">
+      <div className="grid shrink-0 grid-cols-2 gap-3 rounded-xl border border-border bg-card/60 p-4 sm:grid-cols-3">
         <Metric
           icon={<BarChart3 className="h-4 w-4 text-muted-foreground" />}
           label={t("totalConversations")}

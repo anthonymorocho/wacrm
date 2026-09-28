@@ -331,14 +331,14 @@ export default function PipelinesPage() {
 
   if (loading) {
     return (
-      <div className="space-y-6">
-        <div className="flex items-center justify-between">
+      <div className="flex h-full min-h-0 flex-col gap-6">
+        <div className="flex shrink-0 items-center justify-between">
           <div className="h-8 w-48 animate-pulse rounded bg-muted" />
           <div className="h-9 w-28 animate-pulse rounded-lg bg-muted" />
         </div>
-        <div className="flex gap-3">
+        <div className="flex min-h-0 flex-1 gap-3 overflow-hidden">
           {[1, 2, 3, 4, 5].map((i) => (
-            <div key={i} className="h-96 w-72 animate-pulse rounded-xl bg-muted/50" />
+            <div key={i} className="h-full w-72 shrink-0 animate-pulse rounded-xl bg-muted/50" />
           ))}
         </div>
       </div>
@@ -346,9 +346,9 @@ export default function PipelinesPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="flex h-full min-h-0 flex-col gap-6">
       {/* Header */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="flex shrink-0 flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           {/* Pipeline selector dropdown */}
           <DropdownMenu>
@@ -436,7 +436,7 @@ export default function PipelinesPage() {
 
       {/* Board */}
       {pipelines.length === 0 ? (
-        <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border py-20">
+        <div className="flex min-h-0 flex-1 flex-col items-center justify-center rounded-xl border border-dashed border-border py-20">
           <GitBranch className="h-12 w-12 text-muted-foreground" />
           <h3 className="mt-4 text-lg font-medium text-foreground">
             {t("noPipelinesYet")}

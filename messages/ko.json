@@ -636,8 +636,8 @@
       "managePipelines": "파이프라인 관리",
       "editPipelineTitle": "파이프라인 제목 편집",
       "addPipeline": "파이프라인 추가",
-      "addDeal": "딜 추가",
-      "createToStartTracking": "파이프라인을 만들어 딜 추적을 시작하세요",
+      "openConversations": "대화 보기",
+      "createToStartTracking": "고객 대화를 정리하려면 파이프라인을 만드세요",
       "createPipeline": "파이프라인 만들기",
       "newPipeline": "새 파이프라인",
       "pipelineName": "파이프라인 이름",
@@ -647,17 +647,19 @@
       "creating": "만드는 중...",
       "createPipelineBtn": "파이프라인 만들기",
       "toastFailedLoadPipelines": "파이프라인을 불러오지 못했습니다",
-      "toastFailedMoveDeal": "딜을 이동하지 못했습니다",
+      "toastFailedMoveDeal": "대화를 이동하지 못했습니다",
       "toastFailedCreatePipeline": "파이프라인을 만들지 못했습니다",
       "toastPipelineCreated": "파이프라인이 생성되었습니다",
       "toastNotLinkedToAccount": "프로필이 계정에 연결되어 있지 않습니다."
     },
     "board": {
-      "dropDealHere": "여기에 딜을 놓으세요",
-      "addDeal": "딜 추가"
+      "dropDealHere": "여기로 대화를 드래그하세요"
     },
     "card": {
       "noContact": "연락처 없음",
+      "conversationWith": "{who} 고객과의 대화",
+      "lastMessage": "최근 메시지",
+      "noMessagePreview": "메시지 미리보기 없음",
       "won": "성사",
       "lost": "실패"
     },
@@ -713,7 +715,7 @@
     "settings": {
       "managePipeline": "파이프라인 관리",
       "deletePipeline": "파이프라인 삭제",
-      "deletePipelineDesc": "이 파이프라인의 모든 딜이 보관 처리됩니다. 되돌릴 수 없습니다.",
+      "deletePipelineDesc": "이 파이프라인의 모든 항목이 보관 처리됩니다. 되돌릴 수 없습니다.",
       "cancel": "취소",
       "deleting": "삭제 중...",
       "deletePipelineBtn": "파이프라인 삭제",
@@ -729,14 +731,14 @@
       "toastFailedSave": "파이프라인을 저장하지 못했습니다",
       "toastSaved": "파이프라인이 저장되었습니다",
       "toastFailedAddStage": "단계를 추가하지 못했습니다",
-      "toastMoveOrDeleteDeals": "먼저 이 단계의 딜을 이동하거나 삭제하세요",
+      "toastMoveOrDeleteDeals": "먼저 이 단계의 항목을 이동하거나 삭제하세요",
       "toastFailedDeleteStage": "단계를 삭제하지 못했습니다",
       "toastFailedDeletePipeline": "파이프라인을 삭제하지 못했습니다",
       "toastDeleted": "파이프라인이 삭제되었습니다"
     },
     "analytics": {
-      "totalDeals": "전체 딜",
-      "totalDealsTooltip": "실패로 표시되지 않은, 이 파이프라인의 모든 딜 수입니다. 성사된 딜도 포함됩니다.",
+      "totalConversations": "고객 대화",
+      "totalConversationsTooltip": "이 파이프라인에서 메시지를 받은 대화 수이며 고객당 한 번만 계산합니다.",
       "pipelineValue": "파이프라인 금액",
       "pipelineValueTooltip": "실패로 표시된 딜을 제외한, 이 파이프라인 내 모든 딜 금액의 합계입니다.",
       "avgDealSize": "평균 딜 규모",

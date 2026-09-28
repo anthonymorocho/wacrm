@@ -643,8 +643,8 @@
       "managePipelines": "Manage Pipelines",
       "editPipelineTitle": "Edit pipeline title",
       "addPipeline": "Add Pipeline",
-      "addDeal": "Add Deal",
-      "createToStartTracking": "Create a pipeline to start tracking deals",
+      "openConversations": "View conversations",
+      "createToStartTracking": "Create a pipeline to organize customer conversations",
       "createPipeline": "Create Pipeline",
       "newPipeline": "New Pipeline",
       "pipelineName": "Pipeline Name",
@@ -654,17 +654,19 @@
       "creating": "Creating...",
       "createPipelineBtn": "Create Pipeline",
       "toastFailedLoadPipelines": "Failed to load pipelines",
-      "toastFailedMoveDeal": "Failed to move deal",
+      "toastFailedMoveDeal": "Failed to move conversation",
       "toastFailedCreatePipeline": "Failed to create pipeline",
       "toastPipelineCreated": "Pipeline created",
       "toastNotLinkedToAccount": "Your profile is not linked to an account."
     },
     "board": {
-      "dropDealHere": "Drop a deal here",
-      "addDeal": "Add Deal"
+      "dropDealHere": "Drag a conversation here"
     },
     "card": {
       "noContact": "No contact",
+      "conversationWith": "Conversation with {who}",
+      "lastMessage": "Latest message",
+      "noMessagePreview": "No message preview",
       "won": "Won",
       "lost": "Lost"
     },
@@ -720,7 +722,7 @@
     "settings": {
       "managePipeline": "Manage Pipeline",
       "deletePipeline": "Delete Pipeline",
-      "deletePipelineDesc": "This will archive all deals in this pipeline. This cannot be undone.",
+      "deletePipelineDesc": "This will archive every item in this pipeline. This cannot be undone.",
       "cancel": "Cancel",
       "deleting": "Deleting...",
       "deletePipelineBtn": "Delete Pipeline",
@@ -736,14 +738,14 @@
       "toastFailedSave": "Failed to save pipeline",
       "toastSaved": "Pipeline saved",
       "toastFailedAddStage": "Failed to add stage",
-      "toastMoveOrDeleteDeals": "Move or delete deals in this stage first",
+      "toastMoveOrDeleteDeals": "Move or delete the items in this stage first",
       "toastFailedDeleteStage": "Failed to delete stage",
       "toastFailedDeletePipeline": "Failed to delete pipeline",
       "toastDeleted": "Pipeline deleted"
     },
     "analytics": {
-      "totalDeals": "Total Deals",
-      "totalDealsTooltip": "Count of every deal in this pipeline that isn't marked as Lost. Won deals are still included.",
+      "totalConversations": "Customer Conversations",
+      "totalConversationsTooltip": "Conversations with incoming messages in this pipeline, counted once per customer.",
       "pipelineValue": "Pipeline Value",
       "pipelineValueTooltip": "Sum of the dollar values of all deals in this pipeline, excluding deals marked as Lost.",
       "avgDealSize": "Avg Deal Size",

@@ -129,8 +129,8 @@
       "managePipelines": "Administrar embudos",
       "editPipelineTitle": "Editar título del embudo",
       "addPipeline": "Agregar embudo",
-      "addDeal": "Agregar negocio",
-      "createToStartTracking": "Crea un embudo para empezar a dar seguimiento a tus negocios",
+      "openConversations": "Ver conversaciones",
+      "createToStartTracking": "Crea un embudo para organizar las conversaciones con tus clientes",
       "createPipeline": "Crear embudo",
       "newPipeline": "Nuevo embudo",
       "pipelineName": "Nombre del embudo",
@@ -140,17 +140,19 @@
       "creating": "Creando...",
       "createPipelineBtn": "Crear embudo",
       "toastFailedLoadPipelines": "No se pudieron cargar los embudos",
-      "toastFailedMoveDeal": "No se pudo mover el negocio",
+      "toastFailedMoveDeal": "No se pudo mover la conversación",
       "toastFailedCreatePipeline": "No se pudo crear el embudo",
       "toastPipelineCreated": "Embudo creado",
       "toastNotLinkedToAccount": "Tu perfil no está vinculado a una cuenta."
     },
     "board": {
-      "dropDealHere": "Suelta el negocio aquí",
-      "addDeal": "Agregar negocio"
+      "dropDealHere": "Arrastra una conversación aquí"
     },
     "card": {
       "noContact": "Sin contacto",
+      "conversationWith": "Conversación con {who}",
+      "lastMessage": "Último mensaje",
+      "noMessagePreview": "Sin vista previa del mensaje",
       "won": "Ganado",
       "lost": "Perdido"
     },
@@ -206,7 +208,7 @@
     "settings": {
       "managePipeline": "Administrar embudo",
       "deletePipeline": "Eliminar embudo",
-      "deletePipelineDesc": "Esto archivará todos los negocios de este embudo. No se puede deshacer.",
+      "deletePipelineDesc": "Esto archivará todos los elementos de este embudo. No se puede deshacer.",
       "cancel": "Cancelar",
       "deleting": "Eliminando...",
       "deletePipelineBtn": "Eliminar embudo",
@@ -222,14 +224,14 @@
       "toastFailedSave": "No se pudo guardar el embudo",
       "toastSaved": "Embudo guardado",
       "toastFailedAddStage": "No se pudo agregar la etapa",
-      "toastMoveOrDeleteDeals": "Primero mueve o elimina los negocios de esta etapa",
+      "toastMoveOrDeleteDeals": "Primero mueve o elimina los elementos de esta etapa",
       "toastFailedDeleteStage": "No se pudo eliminar la etapa",
       "toastFailedDeletePipeline": "No se pudo eliminar el embudo",
       "toastDeleted": "Embudo eliminado"
     },
     "analytics": {
-      "totalDeals": "Total de negocios",
-      "totalDealsTooltip": "Cantidad de negocios de este embudo que no están marcados como perdidos. Los negocios ganados también se incluyen.",
+      "totalConversations": "Conversaciones de clientes",
+      "totalConversationsTooltip": "Conversaciones con mensajes entrantes en este embudo; se cuenta una por cliente.",
       "pipelineValue": "Valor del embudo",
       "pipelineValueTooltip": "Suma de los valores de todos los negocios del embudo, excepto los marcados como perdidos.",
       "avgDealSize": "Tamaño promedio del negocio",

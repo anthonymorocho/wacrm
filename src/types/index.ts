@@ -430,6 +430,10 @@ export interface Deal {
   created_at: string;
   updated_at?: string;
   contact?: Contact;
+  conversation?:
+    | Pick<Conversation, 'last_message_text' | 'last_message_at'>
+    | Pick<Conversation, 'last_message_text' | 'last_message_at'>[]
+    | null;
   stage?: PipelineStage;
   assignee?: Profile;
 }

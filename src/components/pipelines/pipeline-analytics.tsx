@@ -24,8 +24,12 @@ export function PipelineAnalytics({ deals }: PipelineAnalyticsProps) {
   const t = useTranslations("Pipelines.analytics");
 
   const stats = useMemo(() => {
-    const active = deals.filter((d) => d.status !== "lost");
-    const totalCount = active.length;
+    const conversations = deals.filter(
+      (deal) => deal.auto_created_from_message === true,
+    );
+    const businessDeals = deals.filter(
+      (deal) => deal.auto_created_from_message !== true,
+    );
 
     const now = new Date();
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -33,15 +37,15 @@ export function PipelineAnalytics({ deals }: PipelineAnalyticsProps) {
       const ts = d.updated_at ?? d.created_at;
       return ts ? new Date(ts) >= monthStart : false;
     };
-    const wonThisMonth = deals.filter(
+    const wonThisMonth = businessDeals.filter(
       (d) => d.status === "won" && thisMonth(d),
     ).length;
-    const lostThisMonth = deals.filter(
+    const lostThisMonth = businessDeals.filter(
       (d) => d.status === "lost" && thisMonth(d),
     ).length;
 
     return {
-      totalCount,
+      conversationCount: conversations.length,
       wonThisMonth,
       lostThisMonth,
     };
@@ -52,9 +56,9 @@ export function PipelineAnalytics({ deals }: PipelineAnalyticsProps) {
       <div className="grid grid-cols-2 gap-3 rounded-xl border border-border bg-card/60 p-4 sm:grid-cols-3">
         <Metric
           icon={<BarChart3 className="h-4 w-4 text-muted-foreground" />}
-          label={t("totalDeals")}
-          value={String(stats.totalCount)}
-          tooltip={t("totalDealsTooltip")}
+          label={t("totalConversations")}
+          value={String(stats.conversationCount)}
+          tooltip={t("totalConversationsTooltip")}
           t={t}
         />
         <Metric

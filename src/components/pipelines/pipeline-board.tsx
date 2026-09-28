@@ -16,8 +16,6 @@ import {
 } from "@dnd-kit/core";
 import type { Deal, PipelineStage } from "@/types";
 import { DealCard } from "./deal-card";
-import { Button } from "@/components/ui/button";
-import { Plus } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { formatCurrency } from "@/lib/currency";
 import { useTranslations } from "next-intl";
@@ -26,7 +24,6 @@ interface PipelineBoardProps {
   stages: PipelineStage[];
   deals: Deal[];
   onDealMoved: (dealId: string, newStageId: string) => void;
-  onAddDeal: (stageId: string) => void;
   onEditDeal: (deal: Deal) => void;
   onOpenConversation?: (deal: Deal) => void;
 }
@@ -35,7 +32,6 @@ export function PipelineBoard({
   stages,
   deals,
   onDealMoved,
-  onAddDeal,
   onEditDeal,
   onOpenConversation,
 }: PipelineBoardProps) {
@@ -108,7 +104,10 @@ export function PipelineBoard({
       <div className="pipeline-scroll flex snap-x snap-mandatory gap-3 overflow-x-auto pb-4 lg:snap-none">
         {sortedStages.map((stage) => {
           const stageDeals = dealsByStage.get(stage.id) ?? [];
-          const totalValue = stageDeals.reduce(
+          const businessDeals = stageDeals.filter(
+            (deal) => deal.auto_created_from_message !== true,
+          );
+          const totalValue = businessDeals.reduce(
             (s, d) => s + Number(d.value || 0),
             0,
           );
@@ -118,8 +117,8 @@ export function PipelineBoard({
               stage={stage}
               deals={stageDeals}
               totalValue={totalValue}
+              showTotalValue={businessDeals.length > 0}
               currency={defaultCurrency}
-              onAddDeal={onAddDeal}
               onEditDeal={onEditDeal}
               onOpenConversation={onOpenConversation}
             />
@@ -193,16 +192,16 @@ function StageColumn({
   stage,
   deals,
   totalValue,
+  showTotalValue,
   currency,
-  onAddDeal,
   onEditDeal,
   onOpenConversation,
 }: {
   stage: PipelineStage;
   deals: Deal[];
   totalValue: number;
+  showTotalValue: boolean;
   currency: string;
-  onAddDeal: (stageId: string) => void;
   onEditDeal: (deal: Deal) => void;
   onOpenConversation?: (deal: Deal) => void;
 }) {
@@ -230,9 +229,11 @@ function StageColumn({
           {deals.length}
         </span>
       </div>
-      <p className="text-xs text-muted-foreground">
-        {formatCurrency(totalValue, currency)}
-      </p>
+      {showTotalValue && (
+        <p className="text-xs text-muted-foreground">
+          {formatCurrency(totalValue, currency)}
+        </p>
+      )}
 
       <div
         ref={setNodeRef}
@@ -258,16 +259,6 @@ function StageColumn({
           ))
         )}
       </div>
-
-      <Button
-        variant="ghost"
-        size="sm"
-        onClick={() => onAddDeal(stage.id)}
-        className="mt-3 w-full justify-start border border-dashed border-border bg-transparent text-muted-foreground hover:border-border hover:bg-muted hover:text-foreground"
-      >
-        <Plus className="mr-1 h-3 w-3" />
-        {t("addDeal")}
-      </Button>
     </div>
   );
 }

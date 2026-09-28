@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
+import Link from "next/link";
 import type { Pipeline, PipelineStage, Deal } from "@/types";
 import { PipelineBoard } from "@/components/pipelines/pipeline-board";
 import { PipelineSettings } from "@/components/pipelines/pipeline-settings";
@@ -25,7 +26,14 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { GitBranch, Plus, ChevronDown, Pencil, Settings } from "lucide-react";
+import {
+  GitBranch,
+  Plus,
+  ChevronDown,
+  Pencil,
+  Settings,
+  MessageCircle,
+} from "lucide-react";
 import { toast } from "sonner";
 import { useCan } from "@/hooks/use-can";
 import { useAuth } from "@/hooks/use-auth";
@@ -36,16 +44,12 @@ import {
   DEFAULT_PIPELINE_STAGES,
 } from "@/lib/pipelines/defaults";
 
-// Pipeline creation is admin-class (settings-tier write under
-// the new RLS); deal creation is operational and only requires
-// agent+. The two CTAs gate on different `useCan` capabilities,
-// not on different copy.
+// Pipeline creation is admin-class (settings-tier write under the new RLS).
 
 export default function PipelinesPage() {
   const t = useTranslations("Pipelines.page");
   const supabase = createClient();
   const canEditSettings = useCan("edit-settings");
-  const canCreateDeals = useCan("send-messages");
   const { accountId } = useAuth();
 
   const [pipelines, setPipelines] = useState<Pipeline[]>([]);
@@ -60,12 +64,10 @@ export default function PipelinesPage() {
   const [creating, setCreating] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
 
-  // Deal form state is lifted here so both the top-bar "Add Deal" and
-  // the per-column "+" trigger the same Sheet.
+  // Existing business deals can still be edited from their cards.
   const [dealFormOpen, setDealFormOpen] = useState(false);
   const [editingDeal, setEditingDeal] = useState<Deal | null>(null);
   const [conversationDeal, setConversationDeal] = useState<Deal | null>(null);
-  const [defaultStageId, setDefaultStageId] = useState<string>("");
 
   // Guard against double-seeding (React StrictMode double-effect in dev).
   const seedAttempted = useRef(false);
@@ -98,10 +100,23 @@ export default function PipelinesPage() {
     async (pipelineId: string) => {
       const { data } = await supabase
         .from("deals")
-        .select("*, contact:contacts(*), assignee:profiles!deals_assigned_to_fkey(*)")
+        .select(
+          "*, contact:contacts(*), assignee:profiles!deals_assigned_to_fkey(*), conversation:conversations(last_message_text,last_message_at)",
+        )
         .eq("pipeline_id", pipelineId)
         .order("last_activity_at", { ascending: false, nullsFirst: false });
-      return (data ?? []) as Deal[];
+
+      // Auto-created deal rows are the pipeline's customer conversations.
+      // The query is newest first, so keep one current card per customer.
+      const seenCustomers = new Set<string>();
+      return ((data ?? []) as Deal[]).filter((deal) => {
+        if (deal.auto_created_from_message !== true) return true;
+
+        const customerId = deal.contact_id ?? deal.conversation_id ?? deal.id;
+        if (seenCustomers.has(customerId)) return false;
+        seenCustomers.add(customerId);
+        return true;
+      });
     },
     [supabase],
   );
@@ -255,18 +270,8 @@ export default function PipelinesPage() {
     [supabase, refreshDeals, t],
   );
 
-  const handleAddDeal = useCallback(
-    (stageId?: string) => {
-      setEditingDeal(null);
-      setDefaultStageId(stageId ?? stages[0]?.id ?? "");
-      setDealFormOpen(true);
-    },
-    [stages],
-  );
-
   const handleEditDeal = useCallback((deal: Deal) => {
     setEditingDeal(deal);
-    setDefaultStageId(deal.stage_id);
     setDealFormOpen(true);
   }, []);
 
@@ -418,16 +423,14 @@ export default function PipelinesPage() {
             <Plus className="mr-1 h-4 w-4" />
             {t("addPipeline")}
           </GatedButton>
-          <GatedButton
-            canAct={canCreateDeals}
-            gateReason="create deals"
-            disabled={!selectedPipelineId || stages.length === 0}
-            onClick={() => handleAddDeal()}
+          <Button
+            nativeButton={false}
+            render={<Link href="/inbox" />}
             className="bg-primary text-primary-foreground hover:bg-primary/90"
           >
-            <Plus className="mr-1 h-4 w-4" />
-            {t("addDeal")}
-          </GatedButton>
+            <MessageCircle className="mr-1 h-4 w-4" />
+            {t("openConversations")}
+          </Button>
         </div>
       </div>
 
@@ -458,7 +461,6 @@ export default function PipelinesPage() {
             stages={stages}
             deals={deals}
             onDealMoved={handleDealMoved}
-            onAddDeal={handleAddDeal}
             onEditDeal={handleEditDeal}
             onOpenConversation={handleOpenConversation}
           />
@@ -528,7 +530,6 @@ export default function PipelinesPage() {
         deal={editingDeal}
         pipelineId={selectedPipelineId}
         stages={stages}
-        defaultStageId={defaultStageId}
         onSaved={refreshDeals}
       />
 

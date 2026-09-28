@@ -483,6 +483,7 @@ export async function loadActivity(
     db
       .from('deals')
       .select('id, title, updated_at, stage:pipeline_stages(name)')
+      .eq('auto_created_from_message', false)
       .order('updated_at', { ascending: false })
       .limit(10),
     db

@@ -4,6 +4,7 @@ import {
   buildAgentWorkload,
   buildQueueCountBreakdown,
   loadConversationsSeries,
+  loadActivity,
   loadQueueCounts,
   loadQueueCount,
 } from './queries';
@@ -74,7 +75,7 @@ describe('queue channel counts', () => {
         whatsapp: 10,
         messenger: 5,
         instagram: 0,
-      }),
+      })
     ).toEqual({
       whatsapp: 10,
       messenger: 5,
@@ -132,5 +133,92 @@ describe('loadConversationsSeries', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+describe('loadActivity', () => {
+  it('shows inbound messages without duplicating their auto-created deals', async () => {
+    const rows = {
+      messages: [
+        {
+          id: 'message-1',
+          content_text: 'Hola',
+          sender_type: 'customer',
+          created_at: '2026-09-28T12:00:00.000Z',
+          conversation_id: 'conversation-1',
+          conversations: [
+            {
+              contact_id: 'contact-1',
+              contacts: [{ name: 'Ana', phone: '123' }],
+            },
+          ],
+        },
+      ],
+      contacts: [],
+      deals: [
+        {
+          id: 'auto-deal-1',
+          title: 'Ana',
+          updated_at: '2026-09-28T12:00:00.000Z',
+          auto_created_from_message: true,
+          stage: [{ name: 'WhatsApp' }],
+        },
+        {
+          id: 'real-deal-1',
+          title: 'Proyecto de Ana',
+          updated_at: '2026-09-28T11:00:00.000Z',
+          auto_created_from_message: false,
+          stage: [{ name: 'Propuesta' }],
+        },
+      ],
+      broadcasts: [],
+      automation_logs: [],
+    } as const;
+    const builders: Record<
+      string,
+      {
+        eq: ReturnType<typeof vi.fn>;
+      }
+    > = {};
+
+    const db = {
+      from: vi.fn((table: keyof typeof rows) => {
+        let data = [...rows[table]];
+        const builder: {
+          select: ReturnType<typeof vi.fn>;
+          eq: ReturnType<typeof vi.fn>;
+          order: ReturnType<typeof vi.fn>;
+          limit: ReturnType<typeof vi.fn>;
+          then: (
+            resolve: (value: { data: unknown[]; error: null }) => unknown
+          ) => Promise<unknown>;
+        } = {
+          select: vi.fn(() => builder),
+          eq: vi.fn((column: string, value: unknown) => {
+            data = data.filter(
+              (row) => (row as Record<string, unknown>)[column] === value
+            );
+            return builder;
+          }),
+          order: vi.fn(() => builder),
+          limit: vi.fn(() => builder),
+          then: (resolve) =>
+            Promise.resolve({ data, error: null }).then(resolve),
+        };
+        builders[table] = builder;
+        return builder;
+      }),
+    };
+
+    const result = await loadActivity(db as never);
+
+    expect(result.map(({ id, kind }) => [id, kind])).toEqual([
+      ['msg-message-1', 'message'],
+      ['deal-real-deal-1', 'deal'],
+    ]);
+    expect(builders.deals.eq).toHaveBeenCalledWith(
+      'auto_created_from_message',
+      false
+    );
   });
 });

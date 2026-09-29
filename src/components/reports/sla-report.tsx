@@ -25,7 +25,7 @@ import {
 } from '@/components/ui/table';
 import { useAuth } from '@/hooks/use-auth';
 import { createClient } from '@/lib/supabase/client';
-import { daysAgoStart, localDayKey } from '@/lib/dashboard/date-utils';
+import { localDayKey } from '@/lib/dashboard/date-utils';
 import {
   formatResponseTime,
   type ResponseTimeLabels,
@@ -107,8 +107,9 @@ function logSlaReportFailure(prefix: string, caught: unknown) {
 }
 
 function initialDateRange() {
-  const to = localDayKey(new Date());
-  const from = localDayKey(daysAgoStart(29));
+  const today = new Date();
+  const to = localDayKey(today);
+  const from = localDayKey(new Date(today.getFullYear(), today.getMonth(), 1));
   return { from, to };
 }
 

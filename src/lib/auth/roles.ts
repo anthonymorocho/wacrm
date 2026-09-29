@@ -71,6 +71,11 @@ export function canManageMembers(role: AccountRole): boolean {
   return hasMinRole(role, "admin");
 }
 
+/** Owner, admin, and agent: view reports, scoped to the caller where needed. */
+export function canViewReports(role: AccountRole): boolean {
+  return hasMinRole(role, "agent");
+}
+
 /**
  * Owner / admin: edit account-wide settings (WhatsApp config,
  * message templates, pipelines, tags, custom fields, account

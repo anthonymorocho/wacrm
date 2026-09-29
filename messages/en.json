@@ -87,7 +87,7 @@
     "sla": {
       "title": "ASA by agent",
       "description": "Review average response time, SLA compliance, and conversations handled by each agent.",
-      "accessDenied": "Only account owners and administrators can view agent performance reports.",
+      "accessDenied": "This report is available to agents, administrators, and owners. Agents can only see their own data.",
       "configure": "Configure SLA",
       "closeSettings": "Close SLA settings",
       "thresholdsTitle": "SLA limits",
@@ -116,6 +116,7 @@
       "agent": "Agent",
       "customers": "Customers",
       "customerCount": "View customers ({count})",
+      "viewPendingCustomers": "View pending customers ({count})",
       "compliance": "Compliance",
       "optimal": "Optimal",
       "ideal": "Ideal",

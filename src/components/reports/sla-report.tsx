@@ -26,7 +26,10 @@ import {
 import { useAuth } from '@/hooks/use-auth';
 import { createClient } from '@/lib/supabase/client';
 import { daysAgoStart, localDayKey } from '@/lib/dashboard/date-utils';
-import { canEditSettings, canManageMembers } from '@/lib/auth/roles';
+import {
+  canEditSettings,
+  canViewReports,
+} from '@/lib/auth/roles';
 import {
   loadSlaAgentMetrics,
   loadSlaThresholds,
@@ -140,9 +143,10 @@ function countFor<K extends keyof SlaAgentMetric>(
 export function SlaReport() {
   const t = useTranslations('Reports.sla');
   const locale = useLocale();
-  const { accountId, accountRole } = useAuth();
+  const { accountId, accountRole, profileLoading, user } = useAuth();
   const canConfigure = !!accountRole && canEditSettings(accountRole);
-  const isManager = !!accountRole && canManageMembers(accountRole);
+  const canViewReport = !!accountRole && canViewReports(accountRole);
+  const currentUserId = user?.id ?? null;
 
   const [draftRange, setDraftRange] = useState(initialDateRange);
   const [appliedRange, setAppliedRange] = useState(initialDateRange);
@@ -177,12 +181,23 @@ export function SlaReport() {
           loadSlaAgentMetrics(db, period.from, period.to)
         ),
         withSlaReportContext('agent profiles query', async () => {
-          const { data, error } = await db
+          if (accountRole === 'agent' && !currentUserId) {
+            throw new Error('Could not identify the current agent');
+          }
+
+          let profilesQuery = db
             .from('profiles')
             .select('user_id, full_name')
             .eq('account_id', accountId)
-            .in('account_role', ['owner', 'admin', 'agent'])
-            .order('full_name', { ascending: true });
+            .in('account_role', ['owner', 'admin', 'agent']);
+
+          if (accountRole === 'agent') {
+            profilesQuery = profilesQuery.eq('user_id', currentUserId!);
+          }
+
+          const { data, error } = await profilesQuery.order('full_name', {
+            ascending: true,
+          });
 
           if (error) throw error;
           return (data ?? []) as AgentProfile[];
@@ -221,15 +236,24 @@ export function SlaReport() {
     } finally {
       setLoading(false);
     }
-  }, [accountId, appliedRange.from, appliedRange.to, locale, t]);
+  }, [
+    accountId,
+    accountRole,
+    appliedRange.from,
+    appliedRange.to,
+    currentUserId,
+    locale,
+    t,
+  ]);
 
   useEffect(() => {
-    if (!isManager) {
+    if (profileLoading) return;
+    if (!canViewReport) {
       setLoading(false);
       return;
     }
     void loadReport();
-  }, [isManager, loadReport]);
+  }, [canViewReport, loadReport, profileLoading]);
 
   const totals = useMemo(() => {
     const answered =
@@ -288,7 +312,21 @@ export function SlaReport() {
     }
   }
 
-  if (!isManager) {
+  if (profileLoading) {
+    return (
+      <div className="space-y-5" aria-busy="true">
+        <div className="bg-muted h-7 w-48 animate-pulse rounded" />
+        <Card>
+          <CardContent className="space-y-3 p-5">
+            <div className="bg-muted h-4 w-1/3 animate-pulse rounded" />
+            <div className="bg-muted/70 h-10 animate-pulse rounded" />
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  if (!canViewReport) {
     return (
       <section className="border-border bg-card rounded-xl border p-6">
         <h1 className="text-foreground text-xl font-semibold">{t('title')}</h1>
@@ -541,10 +579,33 @@ export function SlaReport() {
                       value={row.lowCount}
                       className="text-amber-500"
                     />
-                    <CountCell
-                      value={row.pendingCount}
-                      className="text-muted-foreground"
-                    />
+                    <TableCell className="text-right tabular-nums">
+                      {row.pendingCustomerNames.length > 0 ? (
+                        <div className="flex flex-col items-end gap-1">
+                          <span>{row.pendingCount.toLocaleString(locale)}</span>
+                          <details className="max-w-56 text-right">
+                            <summary className="text-primary focus-visible:ring-ring cursor-pointer text-xs underline-offset-4 hover:underline focus-visible:ring-2 focus-visible:outline-none">
+                              {t('viewPendingCustomers', {
+                                count: row.pendingCustomerNames.length,
+                              })}
+                            </summary>
+                            <ul className="text-muted-foreground mt-2 max-h-40 space-y-1 overflow-auto text-left text-xs">
+                              {row.pendingCustomerNames.map((customer) => (
+                                <li
+                                  key={customer}
+                                  className="truncate"
+                                  title={customer}
+                                >
+                                  {customer}
+                                </li>
+                              ))}
+                            </ul>
+                          </details>
+                        </div>
+                      ) : (
+                        row.pendingCount.toLocaleString(locale)
+                      )}
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -567,6 +628,7 @@ function emptyMetric(agentId: string): SlaAgentMetric {
     lowCount: 0,
     pendingCount: 0,
     customerNames: [],
+    pendingCustomerNames: [],
   };
 }
 

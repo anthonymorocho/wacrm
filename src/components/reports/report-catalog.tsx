@@ -9,13 +9,13 @@ import {
   CardContent,
 } from '@/components/ui/card';
 import { useAuth } from '@/hooks/use-auth';
-import { canManageMembers } from '@/lib/auth/roles';
+import { canViewReports } from '@/lib/auth/roles';
 
 export function ReportCatalog() {
   const t = useTranslations('Reports.catalog');
   const tSla = useTranslations('Reports.sla');
   const { accountRole, profileLoading } = useAuth();
-  const canViewReports = !!accountRole && canManageMembers(accountRole);
+  const canViewReportCatalog = !!accountRole && canViewReports(accountRole);
 
   if (profileLoading) {
     return (
@@ -37,7 +37,7 @@ export function ReportCatalog() {
     );
   }
 
-  if (!canViewReports) {
+  if (!canViewReportCatalog) {
     return (
       <section className="border-border bg-card rounded-xl border p-6">
         <h1 className="text-foreground text-xl font-semibold">

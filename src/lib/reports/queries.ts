@@ -12,6 +12,7 @@ export interface SlaAgentMetric {
   lowCount: number;
   pendingCount: number;
   customerNames: string[];
+  pendingCustomerNames: string[];
 }
 
 interface SlaAgentMetricRow {
@@ -23,6 +24,7 @@ interface SlaAgentMetricRow {
   low_count: number;
   pending_count: number;
   customer_names: string[] | null;
+  pending_customer_names: string[] | null;
 }
 
 interface SlaThresholdRow {
@@ -90,5 +92,6 @@ export async function loadSlaAgentMetrics(
     lowCount: Number(row.low_count),
     pendingCount: Number(row.pending_count),
     customerNames: row.customer_names ?? [],
+    pendingCustomerNames: row.pending_customer_names ?? [],
   }));
 }

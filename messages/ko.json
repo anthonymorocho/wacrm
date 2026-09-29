@@ -116,12 +116,10 @@
       "agent": "상담원",
       "customers": "고객",
       "customerCount": "고객 보기 ({count})",
-      "viewPendingCustomers": "응답 대기 고객 보기 ({count})",
       "compliance": "준수율",
       "optimal": "최적",
       "ideal": "이상적",
       "low": "낮음",
-      "pending": "응답 대기",
       "noData": "—",
       "empty": "선택한 날짜 범위에 대화가 없습니다.",
       "loading": "보고서 불러오는 중",
@@ -697,6 +695,7 @@
   "Pipelines": {
     "page": {
       "selectPipeline": "파이프라인 선택",
+      "searchConversations": "파이프라인 대화 검색...",
       "noPipelinesYet": "아직 파이프라인이 없습니다",
       "managePipelines": "파이프라인 관리",
       "editPipelineTitle": "파이프라인 제목 편집",
@@ -718,7 +717,8 @@
       "toastNotLinkedToAccount": "프로필이 계정에 연결되어 있지 않습니다."
     },
     "board": {
-      "dropDealHere": "여기로 대화를 드래그하세요"
+      "dropDealHere": "여기로 대화를 드래그하세요",
+      "noSearchResults": "검색과 일치하는 대화가 없습니다."
     },
     "card": {
       "noContact": "연락처 없음",

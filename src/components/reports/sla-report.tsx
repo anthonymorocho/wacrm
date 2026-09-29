@@ -27,6 +27,10 @@ import { useAuth } from '@/hooks/use-auth';
 import { createClient } from '@/lib/supabase/client';
 import { daysAgoStart, localDayKey } from '@/lib/dashboard/date-utils';
 import {
+  formatResponseTime,
+  type ResponseTimeLabels,
+} from '@/lib/dashboard/response-time';
+import {
   canEditSettings,
   canViewReports,
 } from '@/lib/auth/roles';
@@ -125,13 +129,37 @@ function reportPeriod(from: string, to: string) {
   return { from: start.toISOString(), to: end.toISOString() };
 }
 
-function formatMinutes(value: number | null, locale: string, noData: string) {
-  if (value == null || !Number.isFinite(value)) return noData;
+function formatMinutes(
+  value: number | null,
+  locale: string,
+  labels: ResponseTimeLabels
+) {
+  if (value == null || !Number.isFinite(value)) return labels.empty;
+  if (value >= 60) return formatResponseTime(Math.round(value), labels);
+
   return `${new Intl.NumberFormat(locale, {
     maximumFractionDigits: 1,
     minimumFractionDigits: 1,
-  }).format(value)} min`;
+  }).format(value)}${labels.separator}${labels.minute}`;
 }
+
+type SlaBand = 'optimal' | 'ideal' | 'low';
+
+function classifyAverageSla(
+  value: number | null,
+  thresholds: SlaThresholds
+): SlaBand | null {
+  if (value == null || !Number.isFinite(value)) return null;
+  if (value <= thresholds.optimalMinutes) return 'optimal';
+  if (value <= thresholds.lowMinutes) return 'ideal';
+  return 'low';
+}
+
+const SLA_BAND_STYLES: Record<SlaBand, string> = {
+  optimal: 'bg-emerald-500/10 text-emerald-500',
+  ideal: 'bg-sky-500/10 text-sky-500',
+  low: 'bg-amber-500/10 text-amber-500',
+};
 
 function countFor<K extends keyof SlaAgentMetric>(
   rows: AgentReportRow[],
@@ -142,7 +170,15 @@ function countFor<K extends keyof SlaAgentMetric>(
 
 export function SlaReport() {
   const t = useTranslations('Reports.sla');
+  const tDuration = useTranslations('Dashboard.responseTimeChart');
   const locale = useLocale();
+  const durationLabels: ResponseTimeLabels = {
+    second: tDuration('secondsShort'),
+    minute: tDuration('minutesShort'),
+    hour: tDuration('hoursShort'),
+    separator: tDuration('unitSeparator'),
+    empty: t('noData'),
+  };
   const { accountId, accountRole, profileLoading, user } = useAuth();
   const canConfigure = !!accountRole && canEditSettings(accountRole);
   const canViewReport = !!accountRole && canViewReports(accountRole);
@@ -479,7 +515,7 @@ export function SlaReport() {
           value={
             loading
               ? '—'
-              : formatMinutes(totals.averageMinutes, locale, t('noData'))
+              : formatMinutes(totals.averageMinutes, locale, durationLabels)
           }
           detail={t('averageDescription')}
           icon={<Clock3 aria-hidden="true" className="size-4" />}
@@ -525,72 +561,28 @@ export function SlaReport() {
                   <TableHead className="text-right">{t('optimal')}</TableHead>
                   <TableHead className="text-right">{t('ideal')}</TableHead>
                   <TableHead className="text-right">{t('low')}</TableHead>
-                  <TableHead className="text-right">{t('pending')}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {rows.map((row) => (
-                  <TableRow key={row.agentId}>
-                    <TableCell className="font-medium">{row.name}</TableCell>
-                    <TableCell>
-                      {row.customerNames.length > 0 ? (
-                        <details className="group max-w-56">
-                          <summary className="text-primary focus-visible:ring-ring cursor-pointer text-sm underline-offset-4 hover:underline focus-visible:ring-2 focus-visible:outline-none">
-                            {t('customerCount', {
-                              count: row.customerNames.length,
-                            })}
-                          </summary>
-                          <ul className="text-muted-foreground mt-2 max-h-40 space-y-1 overflow-auto text-xs">
-                            {row.customerNames.map((customer) => (
-                              <li
-                                key={customer}
-                                className="truncate"
-                                title={customer}
-                              >
-                                {customer}
-                              </li>
-                            ))}
-                          </ul>
-                        </details>
-                      ) : (
-                        <span className="text-muted-foreground">
-                          {t('noData')}
-                        </span>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums">
-                      {formatMinutes(row.averageMinutes, locale, t('noData'))}
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums">
-                      {formatCompliance(row, locale, t('noData'))}
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums">
-                      {row.totalConversations.toLocaleString(locale)}
-                    </TableCell>
-                    <CountCell
-                      value={row.optimalCount}
-                      className="text-emerald-500"
-                    />
-                    <CountCell
-                      value={row.idealCount}
-                      className="text-sky-500"
-                    />
-                    <CountCell
-                      value={row.lowCount}
-                      className="text-amber-500"
-                    />
-                    <TableCell className="text-right tabular-nums">
-                      {row.pendingCustomerNames.length > 0 ? (
-                        <div className="flex flex-col items-end gap-1">
-                          <span>{row.pendingCount.toLocaleString(locale)}</span>
-                          <details className="max-w-56 text-right">
-                            <summary className="text-primary focus-visible:ring-ring cursor-pointer text-xs underline-offset-4 hover:underline focus-visible:ring-2 focus-visible:outline-none">
-                              {t('viewPendingCustomers', {
-                                count: row.pendingCustomerNames.length,
+                {rows.map((row) => {
+                  const averageBand = classifyAverageSla(
+                    row.averageMinutes,
+                    thresholds
+                  );
+
+                  return (
+                    <TableRow key={row.agentId}>
+                      <TableCell className="font-medium">{row.name}</TableCell>
+                      <TableCell>
+                        {row.customerNames.length > 0 ? (
+                          <details className="group max-w-56">
+                            <summary className="text-primary focus-visible:ring-ring cursor-pointer text-sm underline-offset-4 hover:underline focus-visible:ring-2 focus-visible:outline-none">
+                              {t('customerCount', {
+                                count: row.customerNames.length,
                               })}
                             </summary>
-                            <ul className="text-muted-foreground mt-2 max-h-40 space-y-1 overflow-auto text-left text-xs">
-                              {row.pendingCustomerNames.map((customer) => (
+                            <ul className="text-muted-foreground mt-2 max-h-40 space-y-1 overflow-auto text-xs">
+                              {row.customerNames.map((customer) => (
                                 <li
                                   key={customer}
                                   className="truncate"
@@ -601,13 +593,51 @@ export function SlaReport() {
                               ))}
                             </ul>
                           </details>
+                        ) : (
+                          <span className="text-muted-foreground">
+                            {t('noData')}
+                          </span>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        <div className="flex items-center justify-end gap-2 whitespace-nowrap">
+                          <span>
+                            {formatMinutes(
+                              row.averageMinutes,
+                              locale,
+                              durationLabels
+                            )}
+                          </span>
+                          {averageBand ? (
+                            <span
+                              className={`rounded-full px-2 py-0.5 text-xs font-medium ${SLA_BAND_STYLES[averageBand]}`}
+                            >
+                              {t(averageBand)}
+                            </span>
+                          ) : null}
                         </div>
-                      ) : (
-                        row.pendingCount.toLocaleString(locale)
-                      )}
-                    </TableCell>
-                  </TableRow>
-                ))}
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {formatCompliance(row, locale, t('noData'))}
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {row.totalConversations.toLocaleString(locale)}
+                      </TableCell>
+                      <CountCell
+                        value={row.optimalCount}
+                        className="text-emerald-500"
+                      />
+                      <CountCell
+                        value={row.idealCount}
+                        className="text-sky-500"
+                      />
+                      <CountCell
+                        value={row.lowCount}
+                        className="text-amber-500"
+                      />
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
           )}
@@ -628,7 +658,6 @@ function emptyMetric(agentId: string): SlaAgentMetric {
     lowCount: 0,
     pendingCount: 0,
     customerNames: [],
-    pendingCustomerNames: [],
   };
 }
 

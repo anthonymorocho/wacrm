@@ -116,12 +116,10 @@
       "agent": "Agente",
       "customers": "Clientes",
       "customerCount": "Ver clientes ({count})",
-      "viewPendingCustomers": "Ver clientes pendientes ({count})",
       "compliance": "Cumplimiento",
       "optimal": "Óptimo",
       "ideal": "Ideal",
       "low": "Bajo",
-      "pending": "Esperando respuesta",
       "noData": "—",
       "empty": "No hay conversaciones en este rango de fechas.",
       "loading": "Cargando reporte",
@@ -190,6 +188,7 @@
   "Pipelines": {
     "page": {
       "selectPipeline": "Seleccionar embudo",
+      "searchConversations": "Buscar conversaciones del embudo...",
       "noPipelinesYet": "Todavía no hay embudos",
       "managePipelines": "Administrar embudos",
       "editPipelineTitle": "Editar título del embudo",
@@ -211,7 +210,8 @@
       "toastNotLinkedToAccount": "Tu perfil no está vinculado a una cuenta."
     },
     "board": {
-      "dropDealHere": "Arrastra una conversación aquí"
+      "dropDealHere": "Arrastra una conversación aquí",
+      "noSearchResults": "No hay conversaciones que coincidan con la búsqueda."
     },
     "card": {
       "noContact": "Sin contacto",

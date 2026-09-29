@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
 import type { Pipeline, PipelineStage, Deal } from "@/types";
@@ -33,6 +33,7 @@ import {
   Pencil,
   Settings,
   MessageCircle,
+  Search,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useCan } from "@/hooks/use-can";
@@ -46,6 +47,13 @@ import {
 
 // Pipeline creation is admin-class (settings-tier write under the new RLS).
 
+function normalizeSearchText(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLocaleLowerCase();
+}
+
 export default function PipelinesPage() {
   const t = useTranslations("Pipelines.page");
   const supabase = createClient();
@@ -56,6 +64,7 @@ export default function PipelinesPage() {
   const [selectedPipelineId, setSelectedPipelineId] = useState<string>("");
   const [stages, setStages] = useState<PipelineStage[]>([]);
   const [deals, setDeals] = useState<Deal[]>([]);
+  const [dealSearch, setDealSearch] = useState("");
   const [loading, setLoading] = useState(true);
 
   // Dialog / sheet state
@@ -189,7 +198,6 @@ export default function PipelinesPage() {
     if (!selectedPipelineId) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setStages([]);
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setDeals([]);
       return;
     }
@@ -328,6 +336,29 @@ export default function PipelinesPage() {
   }
 
   const selectedPipeline = pipelines.find((p) => p.id === selectedPipelineId);
+  const normalizedDealSearch = normalizeSearchText(dealSearch.trim());
+  const visibleDeals = useMemo(() => {
+    if (!normalizedDealSearch) return deals;
+
+    return deals.filter((deal) => {
+      const conversation = Array.isArray(deal.conversation)
+        ? deal.conversation[0]
+        : deal.conversation;
+      const searchableValues = [
+        deal.title,
+        deal.contact?.name,
+        deal.contact?.phone,
+        deal.contact?.phone_normalized,
+        conversation?.last_message_text,
+      ];
+
+      return searchableValues.some(
+        (value) =>
+          typeof value === "string" &&
+          normalizeSearchText(value).includes(normalizedDealSearch),
+      );
+    });
+  }, [deals, normalizedDealSearch]);
 
   if (loading) {
     return (
@@ -434,6 +465,25 @@ export default function PipelinesPage() {
         </div>
       </div>
 
+      {selectedPipeline && (
+        <div className="w-full max-w-sm shrink-0">
+          <div className="relative">
+            <Search
+              aria-hidden="true"
+              className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+            />
+            <Input
+              type="search"
+              aria-label={t("searchConversations")}
+              placeholder={t("searchConversations")}
+              value={dealSearch}
+              onChange={(event) => setDealSearch(event.target.value)}
+              className="pl-9"
+            />
+          </div>
+        </div>
+      )}
+
       {/* Board */}
       {pipelines.length === 0 ? (
         <div className="flex min-h-0 flex-1 flex-col items-center justify-center rounded-xl border border-dashed border-border py-20">
@@ -459,7 +509,8 @@ export default function PipelinesPage() {
           <PipelineAnalytics deals={deals} />
           <PipelineBoard
             stages={stages}
-            deals={deals}
+            deals={visibleDeals}
+            isSearchActive={normalizedDealSearch.length > 0}
             onDealMoved={handleDealMoved}
             onEditDeal={handleEditDeal}
             onOpenConversation={handleOpenConversation}

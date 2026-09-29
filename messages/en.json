@@ -116,12 +116,10 @@
       "agent": "Agent",
       "customers": "Customers",
       "customerCount": "View customers ({count})",
-      "viewPendingCustomers": "View pending customers ({count})",
       "compliance": "Compliance",
       "optimal": "Optimal",
       "ideal": "Ideal",
       "low": "Low",
-      "pending": "Awaiting reply",
       "noData": "—",
       "empty": "No conversations match this date range.",
       "loading": "Loading report",
@@ -704,6 +702,7 @@
   "Pipelines": {
     "page": {
       "selectPipeline": "Select Pipeline",
+      "searchConversations": "Search funnel conversations...",
       "noPipelinesYet": "No pipelines yet",
       "managePipelines": "Manage Pipelines",
       "editPipelineTitle": "Edit pipeline title",
@@ -725,7 +724,8 @@
       "toastNotLinkedToAccount": "Your profile is not linked to an account."
     },
     "board": {
-      "dropDealHere": "Drag a conversation here"
+      "dropDealHere": "Drag a conversation here",
+      "noSearchResults": "No conversations match this search."
     },
     "card": {
       "noContact": "No contact",

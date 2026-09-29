@@ -23,6 +23,7 @@ import { useTranslations } from "next-intl";
 interface PipelineBoardProps {
   stages: PipelineStage[];
   deals: Deal[];
+  isSearchActive: boolean;
   onDealMoved: (dealId: string, newStageId: string) => void;
   onEditDeal: (deal: Deal) => void;
   onOpenConversation?: (deal: Deal) => void;
@@ -31,6 +32,7 @@ interface PipelineBoardProps {
 export function PipelineBoard({
   stages,
   deals,
+  isSearchActive,
   onDealMoved,
   onEditDeal,
   onOpenConversation,
@@ -116,6 +118,7 @@ export function PipelineBoard({
               key={stage.id}
               stage={stage}
               deals={stageDeals}
+              isSearchActive={isSearchActive}
               totalValue={totalValue}
               showTotalValue={businessDeals.length > 0}
               currency={defaultCurrency}
@@ -191,6 +194,7 @@ export function PipelineBoard({
 function StageColumn({
   stage,
   deals,
+  isSearchActive,
   totalValue,
   showTotalValue,
   currency,
@@ -199,6 +203,7 @@ function StageColumn({
 }: {
   stage: PipelineStage;
   deals: Deal[];
+  isSearchActive: boolean;
   totalValue: number;
   showTotalValue: boolean;
   currency: string;
@@ -245,7 +250,7 @@ function StageColumn({
       >
         {deals.length === 0 ? (
           <div className="flex flex-1 items-center justify-center rounded-lg border-2 border-dashed border-border py-10 text-xs text-muted-foreground">
-            {t("dropDealHere")}
+            {isSearchActive ? t("noSearchResults") : t("dropDealHere")}
           </div>
         ) : (
           deals.map((deal) => (

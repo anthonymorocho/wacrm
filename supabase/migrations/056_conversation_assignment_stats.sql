@@ -12,6 +12,14 @@ CREATE TABLE IF NOT EXISTS public.conversation_assignment_events (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+-- CREATE TABLE IF NOT EXISTS does not repair a pre-existing table. Keep old
+-- event rows undated rather than assigning them a fabricated timestamp; new
+-- assignment events receive the timestamp through the column default.
+ALTER TABLE public.conversation_assignment_events
+  ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ;
+ALTER TABLE public.conversation_assignment_events
+  ALTER COLUMN created_at SET DEFAULT now();
+
 CREATE INDEX IF NOT EXISTS conversation_assignment_events_received_idx
   ON public.conversation_assignment_events(account_id, to_agent_id, created_at)
   WHERE to_agent_id IS NOT NULL;

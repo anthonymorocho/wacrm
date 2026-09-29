@@ -9,6 +9,7 @@ import { useTotalUnread } from "@/hooks/use-total-unread";
 import { useUnreadNotifications } from "@/hooks/use-unread-notifications";
 import {
   Bell,
+  BarChart3,
   Bot,
   Crown,
   GitBranch,
@@ -26,7 +27,7 @@ import {
   Workflow,
   Zap,
 } from "lucide-react";
-import type { AccountRole } from "@/lib/auth/roles";
+import { hasMinRole, type AccountRole } from "@/lib/auth/roles";
 
 // Per-role chip metadata used in the sidebar's account strip + the
 // Members tab roster. Keeping this near both consumers in a single
@@ -82,6 +83,7 @@ interface NavItem {
   href: string;
   labelKey: string;
   icon: typeof LayoutDashboard;
+  minRole?: AccountRole;
   /**
    * When true, the nav row renders a small "Beta" chip after the label.
    * Purely informational — doesn't affect routing or access.
@@ -91,6 +93,7 @@ interface NavItem {
 
 const navItems: NavItem[] = [
   { href: "/dashboard", labelKey: "dashboard", icon: LayoutDashboard },
+  { href: "/reports", labelKey: "reports", icon: BarChart3, minRole: "admin" },
   { href: "/inbox", labelKey: "inbox", icon: MessageSquare },
   { href: "/comments", labelKey: "comments", icon: MessageCircle },
   { href: "/notifications", labelKey: "notifications", icon: Bell },
@@ -114,6 +117,9 @@ export function Sidebar() {
   const { profile, profileLoading, account, accountRole, signOut } = useAuth();
   const totalUnread = useTotalUnread();
   const unreadNotifications = useUnreadNotifications();
+  const visibleNavItems = navItems.filter(
+    (item) => !item.minRole || (accountRole && hasMinRole(accountRole, item.minRole)),
+  );
   // Only surface the account-name strip when it actually carries
   // information. A solo user's personal account is named after them
   // (the 017 signup trigger seeds it from `full_name`), so showing it
@@ -152,7 +158,7 @@ export function Sidebar() {
         {/* Main navigation */}
         <nav className="flex-1 overflow-y-auto px-2 py-4 xl:px-3" aria-label={t("title")}>
           <ul className="flex flex-col gap-1">
-            {navItems.map((item) => {
+            {visibleNavItems.map((item) => {
               const isActive =
                 pathname === item.href ||
                 (item.href !== "/dashboard" && pathname.startsWith(item.href));

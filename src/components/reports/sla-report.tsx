@@ -25,7 +25,6 @@ import {
 } from '@/components/ui/table';
 import { useAuth } from '@/hooks/use-auth';
 import { createClient } from '@/lib/supabase/client';
-import { localDayKey } from '@/lib/dashboard/date-utils';
 import {
   formatResponseTime,
   type ResponseTimeLabels,
@@ -45,6 +44,10 @@ import {
   validateSlaThresholds,
   type SlaThresholds,
 } from '@/lib/reports/sla';
+import {
+  initialReportDateRange,
+  reportPeriod,
+} from '@/lib/reports/period';
 
 interface AgentProfile {
   user_id: string;
@@ -106,30 +109,6 @@ function logSlaReportFailure(prefix: string, caught: unknown) {
   });
 }
 
-function initialDateRange() {
-  const today = new Date();
-  const to = localDayKey(today);
-  const from = localDayKey(new Date(today.getFullYear(), today.getMonth(), 1));
-  return { from, to };
-}
-
-function dateAtLocalMidnight(value: string): Date | null {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
-  const date = new Date(`${value}T00:00:00`);
-  return Number.isNaN(date.getTime()) || localDayKey(date) !== value
-    ? null
-    : date;
-}
-
-function reportPeriod(from: string, to: string) {
-  const start = dateAtLocalMidnight(from);
-  const end = dateAtLocalMidnight(to);
-  if (!start || !end || start > end) return null;
-
-  end.setDate(end.getDate() + 1);
-  return { from: start.toISOString(), to: end.toISOString() };
-}
-
 function formatMinutes(
   value: number | null,
   locale: string,
@@ -185,8 +164,8 @@ export function SlaReport() {
   const canViewReport = !!accountRole && canViewReports(accountRole);
   const currentUserId = user?.id ?? null;
 
-  const [draftRange, setDraftRange] = useState(initialDateRange);
-  const [appliedRange, setAppliedRange] = useState(initialDateRange);
+  const [draftRange, setDraftRange] = useState(initialReportDateRange);
+  const [appliedRange, setAppliedRange] = useState(initialReportDateRange);
   const [dateError, setDateError] = useState<string | null>(null);
   const [rows, setRows] = useState<AgentReportRow[]>([]);
   const [thresholds, setThresholds] = useState<SlaThresholds>(

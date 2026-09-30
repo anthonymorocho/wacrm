@@ -611,11 +611,11 @@ async function runStep(step: AutomationStep, args: ExecuteArgs): Promise<string>
 
     case 'close_conversation': {
       if (!args.contactId) throw new Error('close_conversation needs a contact')
-      await db
-        .from('conversations')
-        .update({ status: 'closed', updated_at: new Date().toISOString() })
-        .eq('account_id', args.automation.account_id)
-        .eq('contact_id', args.contactId)
+      const { error } = await db.rpc('close_conversations_from_automation', {
+        p_account_id: args.automation.account_id,
+        p_contact_id: args.contactId,
+      })
+      if (error) throw error
       return 'conversation closed'
     }
 

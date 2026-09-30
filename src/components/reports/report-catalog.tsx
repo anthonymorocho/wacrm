@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { ArrowRight, Clock3 } from 'lucide-react';
+import { ArrowRight, Clock3, MessagesSquare } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
 import {
@@ -14,6 +14,7 @@ import { canViewReports } from '@/lib/auth/roles';
 export function ReportCatalog() {
   const t = useTranslations('Reports.catalog');
   const tSla = useTranslations('Reports.sla');
+  const tConversations = useTranslations('Reports.conversations');
   const { accountRole, profileLoading } = useAuth();
   const canViewReportCatalog = !!accountRole && canViewReports(accountRole);
 
@@ -79,6 +80,34 @@ export function ReportCatalog() {
                   </span>
                   <span className="text-muted-foreground block text-sm">
                     {tSla('description')}
+                  </span>
+                </span>
+                <span className="text-muted-foreground hidden shrink-0 items-center gap-1 text-sm sm:flex">
+                  {t('openReport')}
+                  <ArrowRight aria-hidden="true" className="size-4" />
+                </span>
+                <ArrowRight
+                  aria-hidden="true"
+                  className="text-muted-foreground size-4 shrink-0 sm:hidden"
+                />
+              </CardContent>
+            </Card>
+          </Link>
+          <Link
+            href="/reports/conversaciones"
+            className="group block rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+          >
+            <Card className="h-full transition-colors group-hover:bg-muted/40 group-focus-visible:ring-2 group-focus-visible:ring-ring">
+              <CardContent className="flex items-center gap-4 p-5">
+                <span className="bg-primary/10 text-primary flex size-11 shrink-0 items-center justify-center rounded-xl">
+                  <MessagesSquare aria-hidden="true" className="size-5" />
+                </span>
+                <span className="min-w-0 flex-1 space-y-1">
+                  <span className="text-foreground block font-medium">
+                    {tConversations('title')}
+                  </span>
+                  <span className="text-muted-foreground block text-sm">
+                    {tConversations('description')}
                   </span>
                 </span>
                 <span className="text-muted-foreground hidden shrink-0 items-center gap-1 text-sm sm:flex">

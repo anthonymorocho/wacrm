@@ -284,6 +284,7 @@ function DailyBars<T extends { day: string }>({
   labels,
   colors,
   total,
+  description,
 }: {
   title: string;
   range: ReportDateRange;
@@ -292,6 +293,7 @@ function DailyBars<T extends { day: string }>({
   labels: string[];
   colors: string[];
   total: number;
+  description?: string;
 }) {
   const locale = useLocale();
   return (
@@ -334,6 +336,11 @@ function DailyBars<T extends { day: string }>({
           </BarChart>
         </ResponsiveContainer>
       </ChartFrame>
+      {description ? (
+        <p className="text-muted-foreground mt-2 text-xs leading-relaxed">
+          {description}
+        </p>
+      ) : null}
     </ReportPanel>
   );
 }
@@ -511,6 +518,7 @@ export function ConversationReportCharts({
         labels={[t('assigned')]}
         colors={[COLORS.amber]}
         total={assignedTotal}
+        description={t('assignmentHistoryNote')}
       />
 
       <CountDonut
@@ -526,6 +534,7 @@ export function ConversationReportCharts({
         labels={[t('closed'), t('transferred')]}
         colors={[COLORS.teal, COLORS.coral]}
         total={outcomeEventTotal}
+        description={t('closureHistoryNote')}
       />
 
       <DailyBars
